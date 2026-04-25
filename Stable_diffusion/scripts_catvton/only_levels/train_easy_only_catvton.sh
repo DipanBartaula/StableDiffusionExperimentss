@@ -8,6 +8,8 @@
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
+set -euo pipefail
+
 WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
@@ -27,10 +29,17 @@ export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
+trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "$TORCHELASTIC_ERROR_FILE" ]; then echo "[DEBUG] Dumping torchelastic error JSON"; cat "$TORCHELASTIC_ERROR_FILE"; fi' EXIT
+
+echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
+echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
+python -V || true
+torchrun --version || true
+nvidia-smi -L || true
+
 srun torchrun \
   --nnodes=1 \
   --nproc_per_node=4 \
-  --rdzv_backend=c10d \
-  --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
-  --rdzv_id=$SLURM_JOB_ID \
+  --standalone \
+  --master_port=$MASTER_PORT \
   train.py --dataset curvton --difficulty easy --max_steps 12000 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --run_name train_easy_only_catvton
