@@ -47,15 +47,21 @@ for _if in hsn0 ib0 eth0 enp0s3 lo; do
   fi
 done
 
+# Select a concrete network interface name for Gloo/NCCL ("hsn" alone is not a valid device).
+for _if in hsn0 ib0 eth0 enp0s3 lo; do
+  if ip -o link show "$_if" >/dev/null 2>&1; then
+    export NCCL_SOCKET_IFNAME="$_if"
+    export GLOO_SOCKET_IFNAME="$_if"
+    break
+  fi
+done
+
 # For single-node training, use localhost to avoid hostname resolution issues
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
-export DISABLE_WANDB=1
-export WANDB_MODE=disabled
-export WANDB_SILENT=true
 
 trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "$TORCHELASTIC_ERROR_FILE" ]; then echo "[DEBUG] Dumping torchelastic error JSON"; cat "$TORCHELASTIC_ERROR_FILE"; fi' EXIT
 

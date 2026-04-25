@@ -9,11 +9,17 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
+from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from dataloader import build_curvton_difficulty_files, make_loader, subset_files, _list_images
 from model import DiT250M, DiTConfig, count_parameters
 from utils import curriculum_weights, ensure_dir, make_beta_schedule, q_sample, save_batch_preview
+
+try:
+    import wandb  # type: ignore
+except Exception:
+    wandb = None
 
 
 def _maybe_init_ddp() -> tuple[int, int, int, bool, torch.device]:
@@ -34,6 +40,32 @@ def _next_from(iters: Dict[str, Iterator[torch.Tensor]], loaders: Dict[str, torc
     except StopIteration:
         iters[key] = iter(loaders[key])
         return next(iters[key])
+
+
+def _maybe_init_wandb(args: argparse.Namespace, is_main: bool):
+    if not is_main or args.disable_wandb:
+        return None
+    if os.environ.get("DISABLE_WANDB", "0") == "1":
+        return None
+    if wandb is None:
+        return None
+    try:
+        return wandb.init(
+            project=args.wandb_project,
+            name=args.run_name,
+            config=vars(args),
+            settings=wandb.Settings(start_method="thread"),
+        )
+    except Exception:
+        return None
+
+
+def _to_wandb_image(batch: torch.Tensor, caption: str):
+    if wandb is None:
+        return None
+    vis = (batch.clamp(-1, 1) + 1) * 0.5
+    grid = make_grid(vis, nrow=4)
+    return wandb.Image(grid, caption=caption)
 
 
 def train(args: argparse.Namespace) -> None:
@@ -58,6 +90,8 @@ def train(args: argparse.Namespace) -> None:
     if is_main:
         params_m = count_parameters(raw_model) / 1e6
         print(f"DiT params: {params_m:.2f}M")
+
+    wb_run = _maybe_init_wandb(args, is_main)
 
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
 
@@ -176,8 +210,19 @@ def train(args: argparse.Namespace) -> None:
 
         if is_main and global_step % 100 == 0:
             pbar.set_postfix(loss=f"{loss.item():.4f}")
+            if wb_run is not None:
+                wb_run.log({"train/loss": float(loss.item()), "global_step": global_step}, step=global_step)
         if is_main and global_step % args.image_log_interval == 0:
             save_batch_preview(x0_pred[:8].detach().cpu(), os.path.join(sample_dir, f"pred_step_{global_step}.png"))
+            if wb_run is not None:
+                pred_img = _to_wandb_image(x0_pred[:8].detach().cpu(), f"Prediction step {global_step}")
+                gt_img = _to_wandb_image(x0[:8].detach().cpu(), f"Ground truth step {global_step}")
+                log_payload = {"global_step": global_step}
+                if pred_img is not None:
+                    log_payload["images/prediction"] = pred_img
+                if gt_img is not None:
+                    log_payload["images/ground_truth"] = gt_img
+                wb_run.log(log_payload, step=global_step)
         if is_main and global_step > 0 and global_step % args.save_interval == 0:
             to_save = raw_model.state_dict() if world_size == 1 else model.module.state_dict()
             torch.save({"step": global_step, "model": to_save, "cfg": cfg.__dict__}, os.path.join(ckpt_dir, f"ckpt_step_{global_step}.pt"))
@@ -188,6 +233,8 @@ def train(args: argparse.Namespace) -> None:
     if is_main:
         to_save = raw_model.state_dict() if world_size == 1 else model.module.state_dict()
         torch.save({"step": global_step, "model": to_save, "cfg": cfg.__dict__}, os.path.join(ckpt_dir, "ckpt_final.pt"))
+        if wb_run is not None:
+            wb_run.finish()
     if world_size > 1:
         dist.destroy_process_group()
 
@@ -219,6 +266,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--resume", type=str, default=None)
     p.add_argument("--no_resume", action="store_true", default=False)
+    p.add_argument("--wandb_project", type=str, default="custom_dit_pretraining")
+    p.add_argument("--disable_wandb", action="store_true", default=False)
     return p.parse_args()
 
 
