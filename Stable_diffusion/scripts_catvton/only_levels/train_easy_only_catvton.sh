@@ -21,12 +21,13 @@ unset PYTHONPATH || true
 
 # Activate the intended conda env used on the cluster.
 CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch26_env_new}"
 if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
   source "$CONDA_ROOT/etc/profile.d/conda.sh"
 else
   source "$HOME/miniforge3/etc/profile.d/conda.sh"
 fi
-conda activate tryon_env
+conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
@@ -50,6 +51,7 @@ export WANDB_SILENT=true
 trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "$TORCHELASTIC_ERROR_FILE" ]; then echo "[DEBUG] Dumping torchelastic error JSON"; cat "$TORCHELASTIC_ERROR_FILE"; fi' EXIT
 
 echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
+echo "[DEBUG] Conda env=$CONDA_ENV_NAME CONDA_PREFIX=${CONDA_PREFIX:-unset}"
 echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
 python -V || true
 python -c "import sys, encodings; print('[DEBUG] exe', sys.executable); print('[DEBUG] prefix', sys.prefix); print('[DEBUG] encodings', encodings.__file__)" || true
