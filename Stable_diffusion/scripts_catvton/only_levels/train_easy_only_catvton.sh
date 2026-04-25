@@ -14,6 +14,21 @@ WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
 cd "$WORK_DIR"
+
+# Clean inherited Python env vars first; bad PYTHONHOME/PYTHONPATH can break stdlib encodings.
+unset PYTHONHOME || true
+unset PYTHONPATH || true
+
+# Activate the intended conda env used on the cluster.
+CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
+if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
+  source "$CONDA_ROOT/etc/profile.d/conda.sh"
+else
+  source "$HOME/miniforge3/etc/profile.d/conda.sh"
+fi
+conda activate tryon_env
+
+export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
 
 export NCCL_SOCKET_IFNAME=hsn
@@ -37,6 +52,7 @@ trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "
 echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
 echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
 python -V || true
+python -c "import sys, encodings; print('[DEBUG] exe', sys.executable); print('[DEBUG] prefix', sys.prefix); print('[DEBUG] encodings', encodings.__file__)" || true
 python -c "import torch; print('[DEBUG] torch', torch.__version__)" || true
 nvidia-smi -L || true
 
