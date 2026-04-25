@@ -16,7 +16,7 @@ set -euo pipefail
 # Loss: diffusion denoising objective on predicted noise.
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
-DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate}"
+DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-${WORK_DIR}/runs/ootdiffusion}"
 
 cd "${WORK_DIR}"

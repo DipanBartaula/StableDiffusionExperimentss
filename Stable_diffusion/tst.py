@@ -84,7 +84,7 @@ def validate_loader(name: str, loader):
 # ── Main ─────────────────────────────────────────────────────
 results = []
 
-# 1) Triplet TRAIN dataset (triplet_dataset_1 = Phase 2 training data)
+# 1) Triplet TRAIN dataset (triplet_dataset_backup_1_1 = Phase 2 training data)
 print(f"\n>>> Triplet TRAIN dataset: {TRIPLET_TRAIN_PATH}")
 train_loader, _ = get_triplet_train_loader(
     root_dir=TRIPLET_TRAIN_PATH,
@@ -96,7 +96,7 @@ train_loader, _ = get_triplet_train_loader(
 )
 results.append(validate_loader("TRIPLET TRAIN (combined)", train_loader))
 
-# 2) Triplet TEST dataset (triplet_dataset = evaluation data, per-subset loaders)
+# 2) Triplet TEST dataset (triplet_dataset_backup_1 = evaluation data, per-subset loaders)
 print(f"\n>>> Triplet TEST dataset: {TRIPLET_TEST_PATH}")
 test_loaders = get_triplet_test_dataloaders(
     root_dir=TRIPLET_TEST_PATH,

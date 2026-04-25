@@ -16,7 +16,7 @@ set -euo pipefail
 # Loss: denoising objective + optional ATV loss in finetune stage.
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
-DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate}"
+DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-${WORK_DIR}/runs/stable_vton}"
 
 cd "${WORK_DIR}"

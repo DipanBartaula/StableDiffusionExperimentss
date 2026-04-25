@@ -408,7 +408,7 @@ def get_curvton_dataloaders(root_dir: str, batch_size=8, num_workers=32,
     """
     Train dataloaders per difficulty + combined 'all', reading from local disk.
     ``root_dir`` = absolute path to the dataset root, e.g.
-    ``"/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate"``.
+    ``"/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"``.
 
     Returns ``{"easy": DataLoader, "medium": DataLoader,
                "hard": DataLoader, "all": DataLoader}``.
@@ -604,7 +604,7 @@ def get_triplet_test_dataloaders(root_dir: str, batch_size: int = 8,
     Build one DataLoader per subset of the triplet_dataset layout.
 
     ``root_dir`` = absolute path, e.g.
-    ``"/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset"``.
+    ``"/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"``.
 
     Returns a dict with keys:
         ``"dresscode_dresses"``, ``"dresscode_lower"``, ``"dresscode_upper"``,

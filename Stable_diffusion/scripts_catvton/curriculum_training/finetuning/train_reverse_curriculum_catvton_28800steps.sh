@@ -4,13 +4,13 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
 WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
-DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate"
-PHASE2_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_1"
+DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
+PHASE2_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
 
 cd "$WORK_DIR"
 export PYTHONPATH="$WORK_DIR:$PYTHONPATH"

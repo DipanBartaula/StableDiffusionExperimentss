@@ -1,206 +1,102 @@
-"""
-evaluate.py — Standalone checkpoint evaluation script.
-
-Loads a trained checkpoint and runs evaluation on specified test datasets
-(CurvTon and/or Triplet). Results are printed to stdout and optionally
-logged to Weights & Biases.
-
-Usage examples:
-
-  # Evaluate on CurvTon test set only
-  python evaluate.py \
-      --checkpoint /path/to/ckpt_step_5000.pt \
-      --curvton_test_data_path /path/to/dataset_ultimate_test
-
-  # Evaluate on Triplet test set only
-  python evaluate.py \
-      --checkpoint /path/to/ckpt_step_5000.pt \
-      --triplet_test_data_path /path/to/triplet_dataset
-
-  # Evaluate on both datasets
-  python evaluate.py \
-      --checkpoint /path/to/ckpt_step_5000.pt \
-      --curvton_test_data_path /path/to/dataset_ultimate_test \
-      --triplet_test_data_path /path/to/triplet_dataset
-
-  # Multi-GPU evaluation via torchrun
-  torchrun --nproc_per_node=4 evaluate.py \
-      --checkpoint /path/to/ckpt_step_5000.pt \
-      --curvton_test_data_path /path/to/dataset_ultimate_test
-"""
-
-import os
-import sys
-import json
 import argparse
+import json
+import os
 
 import torch
-import torch.distributed as dist
 
-from config import IMAGE_SIZE, MODEL_NAME, WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY
+from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+from eval_common import build_eval_loaders, evaluate_all_splits
 from model import SDModel
-from utils import (
-    get_curvton_test_dataloaders,
-    get_triplet_test_dataloaders,
-    evaluate_on_test,
-)
+from utils import decode_latents, run_full_inference
+
+
+def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if "unet_state_dict" in ckpt:
+        sd = ckpt["unet_state_dict"]
+    elif "model_state_dict" in ckpt:
+        sd = ckpt["model_state_dict"]
+    elif "state_dict" in ckpt:
+        sd = ckpt["state_dict"]
+    else:
+        sd = ckpt
+    clean = {k.removeprefix("module."): v for k, v in sd.items()}
+    unet.load_state_dict(clean, strict=False)
+    return ckpt.get("step", None)
+
+
+def build_predict_fn(model, num_inference_steps: int, ootd: bool):
+    @torch.no_grad()
+    def _predict(batch, device):
+        cloth = batch["cloth"].to(device)
+        person_img = batch.get("person", batch.get("masked_person")).to(device)
+        cond_input = cloth if ootd else torch.cat([person_img, cloth], dim=3)
+        cond_latents = model.vae.encode(cond_input).latent_dist.sample() * 0.18215
+        pred_latents = run_full_inference(model, cond_latents, num_inference_steps=num_inference_steps)
+        pred_wide = decode_latents(model.vae, pred_latents)
+        if ootd:
+            return pred_wide * 2 - 1
+        return pred_wide[:, :, :, : cloth.shape[-1]] * 2 - 1
+
+    return _predict
 
 
 def main(args):
-    # ── Distributed setup ──────────────────────────────────────
-    rank       = int(os.environ.get("RANK",       0))
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    is_main    = (rank == 0)
-
-    if world_size > 1:
-        dist.init_process_group("nccl")
-        torch.cuda.set_device(local_rank)
-
-    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
-
-    if is_main:
-        print(f"Device: {device}  |  rank={rank}/{world_size}")
-        print(f"Checkpoint: {args.checkpoint}")
-
-    # ── Load model ─────────────────────────────────────────────
+    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     model = SDModel().to(device)
-
-    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    unet_sd = ckpt["unet_state_dict"]
-    # Strip DDP 'module.' prefix if present
-    cleaned = {}
-    for k, v in unet_sd.items():
-        cleaned[k.removeprefix("module.")] = v
-
-    missing, unexpected = model.unet.load_state_dict(cleaned, strict=False)
-    if is_main:
-        print(f"Loaded UNet weights from step {ckpt.get('step', '?')}")
-        if missing:
-            print(f"  Missing keys: {len(missing)}")
-        if unexpected:
-            print(f"  Unexpected keys: {len(unexpected)}")
-
     model.unet.eval()
+    if args.use_init_weights:
+        print("Using initial CATVTON weights (no checkpoint load).")
+    else:
+        if not args.checkpoint:
+            raise ValueError("--checkpoint is required unless --use_init_weights is set.")
+        step = _load_unet_checkpoint(model.unet, args.checkpoint, device)
+        if step is None:
+            print(f"Loaded checkpoint: {args.checkpoint}")
+        else:
+            print(f"Loaded checkpoint: {args.checkpoint} (step={step})")
 
-    # ── Build test loaders ─────────────────────────────────────
-    test_loaders: dict = {}
-
-    if args.curvton_test_data_path:
-        genders = ("female", "male") if args.gender == "all" else (args.gender,)
-        if is_main:
-            print(f"\nBuilding CurvTon test loaders from {args.curvton_test_data_path} ...")
-        curvton_test = get_curvton_test_dataloaders(
-            root_dir=args.curvton_test_data_path,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            size=IMAGE_SIZE,
-            genders=genders,
-        )
-        for k, v in curvton_test.items():
-            if k == "all":
-                continue
-            test_loaders[f"curvton_{k}"] = v
-        if is_main:
-            print(f"CurvTon test loaders: {list(k for k in test_loaders if k.startswith('curvton_'))}")
-
-    if args.triplet_test_data_path:
-        if is_main:
-            print(f"\nBuilding Triplet test loaders from {args.triplet_test_data_path} ...")
-        triplet_test = get_triplet_test_dataloaders(
-            root_dir=args.triplet_test_data_path,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            size=IMAGE_SIZE,
-        )
-        test_loaders.update(triplet_test)
-        if is_main:
-            print(f"Triplet test loaders: {list(triplet_test.keys())}")
-
-    if not test_loaders:
-        print("ERROR: No test data paths provided. "
-              "Use --curvton_test_data_path and/or --triplet_test_data_path.")
-        sys.exit(1)
-
-    # ── Run evaluation ─────────────────────────────────────────
-    if is_main:
-        print(f"\nRunning evaluation on {list(test_loaders.keys())} ...")
-        print(f"  eval_frac={args.eval_frac}, n_samples={args.n_samples}, "
-              f"num_inference_steps={args.num_inference_steps}")
-
-    metrics = evaluate_on_test(
-        model, test_loaders, device,
-        num_inference_steps=args.num_inference_steps,
-        eval_frac=args.eval_frac,
-        ootd=args.ootd,
-        rank=rank,
-        world_size=world_size,
-        num_eval_steps=args.num_inference_steps,
-        n_samples=args.n_samples,
+    loaders = build_eval_loaders(
+        curvton_test_data_path=args.curvton_test_data_path,
+        triplet_test_data_path=args.triplet_test_data_path,
+        street_tryon_data_path=args.street_tryon_data_path,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        gender=args.gender,
+        street_split=args.street_split,
     )
-
-    # ── Print & save results ───────────────────────────────────
-    if is_main:
-        print("\n" + "=" * 60)
-        print("EVALUATION RESULTS")
-        print("=" * 60)
-        for key in sorted(metrics.keys()):
-            print(f"  {key}: {metrics[key]:.6f}")
-        print("=" * 60)
-
-        if args.output_json:
-            with open(args.output_json, "w") as f:
-                json.dump(metrics, f, indent=2)
-            print(f"\nResults saved to {args.output_json}")
-
-        if args.wandb:
-            import wandb
-            wandb.login(key=WANDB_API_KEY)
-            run_name = args.wandb_run_name or f"eval_{os.path.basename(args.checkpoint)}"
-            wandb.init(project=WANDB_PROJECT, entity=WANDB_ENTITY,
-                       name=run_name, job_type="eval")
-            wandb.log(metrics)
-            wandb.finish()
-            print("Results logged to W&B")
-
-    if world_size > 1:
-        dist.destroy_process_group()
+    results = evaluate_all_splits(
+        loaders=loaders,
+        predict_fn=build_predict_fn(model, args.num_inference_steps, args.ootd),
+        device=device,
+        max_batches=args.max_batches,
+        eval_frac_curvton=args.eval_frac_curvton,
+        eval_frac_triplet=args.eval_frac_triplet,
+        eval_frac_street=args.eval_frac_street,
+    )
+    if args.output_json:
+        with open(args.output_json, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print(f"\nSaved metrics JSON to: {args.output_json}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Standalone evaluation of a trained virtual try-on checkpoint")
-
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to a .pt checkpoint file")
-    # Dataset paths
-    parser.add_argument("--curvton_test_data_path", type=str, default=None,
-                        help="Path to CurvTon test dataset root (easy/medium/hard splits)")
-    parser.add_argument("--triplet_test_data_path", type=str, default=None,
-                        help="Path to triplet_dataset root (dresscode/viton-hd test splits)")
-    # Evaluation parameters
-    parser.add_argument("--batch_size", type=int, default=8,
-                        help="Batch size for evaluation (default: 8)")
-    parser.add_argument("--num_workers", type=int, default=8,
-                        help="DataLoader workers (default: 8)")
-    parser.add_argument("--num_inference_steps", type=int, default=50,
-                        help="Number of denoising steps for inference (default: 50)")
-    parser.add_argument("--eval_frac", type=float, default=0.01,
-                        help="Fraction of test set per evaluation sample (default: 0.01)")
-    parser.add_argument("--n_samples", type=int, default=10,
-                        help="Number of bootstrap eval samples for mean/std (default: 10)")
-    parser.add_argument("--gender", type=str, default="all",
-                        choices=["female", "male", "all"],
-                        help="CurvTon gender subset (default: all)")
-    parser.add_argument("--ootd", action="store_true", default=False,
-                        help="OOTDiffusion mode: cloth-only conditioning")
-    # Output
-    parser.add_argument("--output_json", type=str, default=None,
-                        help="Path to save results as JSON (optional)")
-    parser.add_argument("--wandb", action="store_true", default=False,
-                        help="Log results to Weights & Biases")
-    parser.add_argument("--wandb_run_name", type=str, default=None,
-                        help="W&B run name for eval logging")
-
-    args = parser.parse_args()
-    main(args)
+    p = argparse.ArgumentParser("Evaluate CATVTON on CurvTON/Triplet/StreetTryOn")
+    p.add_argument("--checkpoint", type=str, default=None)
+    p.add_argument("--curvton_test_data_path", type=str, default=CURVTON_TEST_PATH)
+    p.add_argument("--triplet_test_data_path", type=str, default=TRIPLET_TEST_PATH)
+    p.add_argument("--street_tryon_data_path", type=str, default=STREET_TRYON_PATH)
+    p.add_argument("--street_split", type=str, default="validation", choices=["train", "validation"])
+    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument("--num_workers", type=int, default=8)
+    p.add_argument("--num_inference_steps", type=int, default=30)
+    p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
+    p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
+    p.add_argument("--eval_frac_curvton", type=float, default=0.10)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.30)
+    p.add_argument("--eval_frac_street", type=float, default=0.30)
+    p.add_argument("--ootd", action="store_true", default=False)
+    p.add_argument("--use_init_weights", action="store_true", default=False)
+    p.add_argument("--device", type=str, default=None)
+    p.add_argument("--output_json", type=str, default=None)
+    main(p.parse_args())

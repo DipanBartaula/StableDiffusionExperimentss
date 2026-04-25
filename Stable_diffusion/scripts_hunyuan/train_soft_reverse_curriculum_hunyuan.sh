@@ -10,10 +10,10 @@
 #SBATCH --error=logs/%x_%j.err
 
 WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
-DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate"
-TEST_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate_test"
-TRIPLET_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset"
-PHASE2_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_1"
+DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
+TEST_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
+TRIPLET_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
+PHASE2_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
 
 cd "$WORK_DIR"
 export PYTHONPATH="$WORK_DIR:$PYTHONPATH"

@@ -38,12 +38,12 @@ Where:
 
 Default dataset root
 --------------------
-    /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate
+    /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate
 
 CLI smoke-test
 --------------
     python curvton-dataset-dataloader.py \\
-        --curvton_data_path /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate \\
+        --curvton_data_path /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate \\
         --batch_size 4 --num_workers 0 --epochs 1
 """
 
@@ -232,7 +232,7 @@ class CombinedCurvtonDataset(Dataset):
     Example::
 
         ds = CombinedCurvtonDataset(
-            root_dir="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate",
+            root_dir="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate",
             difficulties=("easy", "medium"),
             genders=("female",),
             size=512,
@@ -551,7 +551,7 @@ def _parse_args() -> argparse.Namespace:
         description="Smoke-test: build CurvTon dataloaders and iterate one epoch."
     )
     p.add_argument("--curvton_data_path",      type=str, required=True, metavar="LOCAL_PATH",
-                   help='Absolute path to dataset root, e.g. "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate"')
+                   help='Absolute path to dataset root, e.g. "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"')
     p.add_argument("--curvton_test_data_path", type=str, default=None)
     p.add_argument("--difficulty",   choices=["easy", "medium", "hard", "all"], default="all")
     p.add_argument("--gender",       choices=["female", "male", "all"],         default="all")

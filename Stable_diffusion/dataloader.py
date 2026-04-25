@@ -29,7 +29,7 @@ Curriculum helpers (re-exported)
 CLI smoke-test
 --------------
     python dataloader.py \\
-        --curvton_data_path /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate \\
+        --curvton_data_path /iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate \\
         --batch_size 4 --num_workers 0 --epochs 1
 """
 
@@ -136,7 +136,7 @@ def build_dataloaders(args: argparse.Namespace) -> DataloaderBundle:
     ---------------------------------------------------------------
     curvton_data_path      str | None   – Local path to dataset root, e.g.
                                           "/iopsstor/scratch/cscs/dbartaula/human_gen/
-                                          dataset_v3/dataset_ultimate"
+                                          dataset_v3_backup_1/dataset_ultimate"
                                           If None, falls back to VITON-HD.
     viton_data_path        str | None   – Local VITON-HD root dir.
     curvton_test_data_path str | None   – Local path for test split (optional).
@@ -286,7 +286,7 @@ def _parse_args() -> argparse.Namespace:
     # Dataset source
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--curvton_data_path",  type=str, metavar="LOCAL_PATH",
-                   help='Local dataset root, e.g. "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate"')
+                   help='Local dataset root, e.g. "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"')
     g.add_argument("--viton_data_path",    type=str, metavar="LOCAL_DIR",
                    help="VITON-HD local root directory")
     # Dataset filters

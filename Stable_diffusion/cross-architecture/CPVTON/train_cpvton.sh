@@ -16,7 +16,7 @@ set -euo pipefail
 # Stage 2 (TOM): try-on module with reconstruction losses on synthesized output.
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
-DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3/dataset_ultimate}"
+DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-${WORK_DIR}/runs/cpvton}"
 CPVTON_STAGE="${CPVTON_STAGE:-GMM}"   # GMM or TOM
 CPVTON_RUN_NAME="${CPVTON_RUN_NAME:-cpvton_${CPVTON_STAGE,,}_bs32}"
