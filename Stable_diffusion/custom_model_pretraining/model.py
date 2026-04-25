@@ -1,0 +1,140 @@
+import math
+from dataclasses import dataclass
+
+import torch
+import torch.nn as nn
+
+
+def _modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+
+class TimestepEmbedder(nn.Module):
+    def __init__(self, hidden_size: int, freq_size: int = 256) -> None:
+        super().__init__()
+        self.freq_size = freq_size
+        self.proj = nn.Sequential(
+            nn.Linear(freq_size, hidden_size),
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size),
+        )
+
+    def forward(self, timesteps: torch.Tensor) -> torch.Tensor:
+        half = self.freq_size // 2
+        device = timesteps.device
+        freqs = torch.exp(
+            -math.log(10000) * torch.arange(0, half, device=device).float() / max(half - 1, 1)
+        )
+        args = timesteps.float().unsqueeze(1) * freqs.unsqueeze(0)
+        emb = torch.cat([torch.sin(args), torch.cos(args)], dim=1)
+        if self.freq_size % 2 == 1:
+            emb = torch.cat([emb, torch.zeros_like(emb[:, :1])], dim=1)
+        return self.proj(emb)
+
+
+class DiTBlock(nn.Module):
+    def __init__(self, hidden_size: int, num_heads: int, mlp_ratio: float = 4.0) -> None:
+        super().__init__()
+        self.norm1 = nn.LayerNorm(hidden_size, eps=1e-6)
+        self.attn = nn.MultiheadAttention(hidden_size, num_heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(hidden_size, eps=1e-6)
+        mlp_hidden = int(hidden_size * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(hidden_size, mlp_hidden),
+            nn.GELU(approximate="tanh"),
+            nn.Linear(mlp_hidden, hidden_size),
+        )
+        self.adaLN = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 6 * hidden_size),
+        )
+
+    def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        shift1, scale1, gate1, shift2, scale2, gate2 = self.adaLN(cond).chunk(6, dim=1)
+        a = _modulate(self.norm1(x), shift1, scale1)
+        a, _ = self.attn(a, a, a, need_weights=False)
+        x = x + gate1.unsqueeze(1) * a
+        m = self.mlp(_modulate(self.norm2(x), shift2, scale2))
+        x = x + gate2.unsqueeze(1) * m
+        return x
+
+
+class FinalLayer(nn.Module):
+    def __init__(self, hidden_size: int, patch_size: int, out_channels: int) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(hidden_size, eps=1e-6)
+        self.mod = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 2 * hidden_size),
+        )
+        self.proj = nn.Linear(hidden_size, patch_size * patch_size * out_channels)
+
+    def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        shift, scale = self.mod(cond).chunk(2, dim=1)
+        x = _modulate(self.norm(x), shift, scale)
+        return self.proj(x)
+
+
+@dataclass
+class DiTConfig:
+    image_size: int = 64
+    in_channels: int = 3
+    patch_size: int = 2
+    hidden_size: int = 1536
+    depth: int = 9
+    num_heads: int = 24
+    mlp_ratio: float = 4.0
+
+
+class DiT250M(nn.Module):
+    """
+    ~250M parameter DiT that predicts clean data x0 from x_t, t.
+    """
+
+    def __init__(self, cfg: DiTConfig) -> None:
+        super().__init__()
+        self.cfg = cfg
+        assert cfg.image_size % cfg.patch_size == 0, "image_size must be divisible by patch_size"
+        self.grid = cfg.image_size // cfg.patch_size
+        self.num_tokens = self.grid * self.grid
+        self.patch_dim = cfg.patch_size * cfg.patch_size * cfg.in_channels
+
+        self.patch_embed = nn.Conv2d(
+            cfg.in_channels, cfg.hidden_size, kernel_size=cfg.patch_size, stride=cfg.patch_size
+        )
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_tokens, cfg.hidden_size))
+        self.time_embed = TimestepEmbedder(cfg.hidden_size)
+        self.blocks = nn.ModuleList(
+            [DiTBlock(cfg.hidden_size, cfg.num_heads, cfg.mlp_ratio) for _ in range(cfg.depth)]
+        )
+        self.final = FinalLayer(cfg.hidden_size, cfg.patch_size, cfg.in_channels)
+        self._init_weights()
+
+    def _init_weights(self) -> None:
+        nn.init.normal_(self.pos_embed, std=0.02)
+        nn.init.xavier_uniform_(self.patch_embed.weight)
+        nn.init.zeros_(self.patch_embed.bias)
+
+    def unpatchify(self, x: torch.Tensor) -> torch.Tensor:
+        b = x.shape[0]
+        p = self.cfg.patch_size
+        c = self.cfg.in_channels
+        h = w = self.grid
+        x = x.view(b, h, w, p, p, c)
+        x = x.permute(0, 5, 1, 3, 2, 4).contiguous()
+        return x.view(b, c, h * p, w * p)
+
+    def forward(self, x_t: torch.Tensor, timesteps: torch.Tensor) -> torch.Tensor:
+        x = self.patch_embed(x_t)  # [B, D, H', W']
+        x = x.flatten(2).transpose(1, 2)  # [B, N, D]
+        x = x + self.pos_embed
+        t = self.time_embed(timesteps)
+        for block in self.blocks:
+            x = block(x, t)
+        x = self.final(x, t)
+        return self.unpatchify(x)
+
+
+def count_parameters(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters())
+
