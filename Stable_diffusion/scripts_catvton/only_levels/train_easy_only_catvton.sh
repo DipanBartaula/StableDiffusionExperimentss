@@ -28,6 +28,9 @@ export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export DISABLE_WANDB=1
+export WANDB_MODE=disabled
+export WANDB_SILENT=true
 
 trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "$TORCHELASTIC_ERROR_FILE" ]; then echo "[DEBUG] Dumping torchelastic error JSON"; cat "$TORCHELASTIC_ERROR_FILE"; fi' EXIT
 

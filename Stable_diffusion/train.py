@@ -40,8 +40,16 @@ from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
-import wandb
-import weave
+try:
+    import wandb
+    _WANDB_IMPORT_ERROR = None
+except Exception as _e:
+    wandb = None
+    _WANDB_IMPORT_ERROR = _e
+try:
+    import weave
+except Exception:
+    weave = None
 
 from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, MODEL_NAME, IMAGE_SIZE
 from model import SDModel, freeze_non_attention, print_trainable_params
@@ -80,10 +88,29 @@ def train(args):
 
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
 
+    wandb_enabled = False
     if is_main:
-        wandb.login(key=WANDB_API_KEY)
-        weave.init(f'{WANDB_ENTITY}/{WANDB_PROJECT}')
+        # Allow training to continue even if wandb is unavailable/broken on cluster envs.
+        if os.environ.get("DISABLE_WANDB", "0") == "1":
+            print("[INFO] W&B disabled via DISABLE_WANDB=1")
+        elif wandb is None:
+            print(f"[WARN] W&B unavailable, disabling logging: {_WANDB_IMPORT_ERROR}")
+        else:
+            try:
+                wandb.login(key=WANDB_API_KEY)
+                if weave is not None:
+                    weave.init(f'{WANDB_ENTITY}/{WANDB_PROJECT}')
+                wandb_enabled = True
+            except Exception as _we:
+                print(f"[WARN] W&B init failed, disabling logging: {_we}")
         print(f"Device: {device}  |  rank={rank}/{world_size}")
+
+    def _wandb_log(payload, step=None):
+        if is_main and wandb_enabled:
+            try:
+                wandb.log(payload, step=step)
+            except Exception as _log_e:
+                _train_log.warning("wandb.log failed at step=%s: %s", step, _log_e)
 
     # ── GPU performance flags ───────────────────────────────────
     if device.type == "cuda":
@@ -347,7 +374,7 @@ def train(args):
         dist.barrier()  # ensure all ranks pass before training starts
 
     # WandB (rank 0 only)
-    if is_main:
+    if is_main and wandb_enabled:
         run = wandb.init(
             project=WANDB_PROJECT,
             entity=WANDB_ENTITY,
@@ -629,7 +656,7 @@ def train(args):
 
                 current_lr = optimizer.param_groups[0]['lr']
                 epoch_losses.append(loss_val)
-                if is_main: wandb.log({
+                if is_main: _wandb_log({
                     "train/loss":              loss_val,
                     "train/loss_ema":          ema_loss,
                     "train/loss_mean":         loss_mean,
@@ -645,7 +672,7 @@ def train(args):
                 # Curriculum weight logging
                 if is_main and not _in_phase2 and use_curvton and args.curriculum != "none":
                     _cwe, _cwm, _cwh = _curriculum_weights(global_step, args.curriculum, args.stage_steps, getattr(args, 'hard_pct', None))
-                    wandb.log({
+                    _wandb_log({
                         "curriculum/w_easy":   _cwe,
                         "curriculum/w_medium": _cwm,
                         "curriculum/w_hard":   _cwh,
@@ -695,10 +722,10 @@ def train(args):
                     n_samples=10,        # 10 independent random samples → mean ± std
                 )
                 if is_main:
-                    wandb.log(eval_metrics, step=global_step)
+                    _wandb_log(eval_metrics, step=global_step)
                     print(f"\u2713 Eval metrics logged to W&B")
 
-            if is_main: wandb.log({"train/phase": 2 if _in_phase2 else 1}, step=global_step)
+            if is_main: _wandb_log({"train/phase": 2 if _in_phase2 else 1}, step=global_step)
 
             if _step_ok:
                 pbar.set_postfix(loss=f"{loss_val:.4f}")
@@ -720,7 +747,7 @@ def train(args):
         else:
             avg_loss = float('nan')
         if is_main:
-            wandb.log({"train/epoch_avg_loss": avg_loss}, step=global_step)
+            _wandb_log({"train/epoch_avg_loss": avg_loss}, step=global_step)
             print(f"\nEpoch {epoch+1} complete. Avg Loss: {avg_loss:.6f}")
 
         # Break outer loop if max_steps reached
@@ -764,10 +791,10 @@ def train(args):
             # prefix all keys with final/ so they appear separately in W&B
             final_log = {k.replace("test/", "final/", 1): v
                          for k, v in final_eval_metrics.items()}
-            wandb.log(final_log, step=global_step)
+            _wandb_log(final_log, step=global_step)
             print("✓ Final eval metrics logged to W&B under 'final/' prefix")
 
-    if is_main:
+    if is_main and wandb_enabled:
         wandb.finish()
 
     if world_size > 1:
