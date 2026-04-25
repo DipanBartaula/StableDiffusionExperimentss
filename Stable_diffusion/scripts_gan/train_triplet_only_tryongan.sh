@@ -23,7 +23,7 @@ export FI_CXI_ATS=0
 export GLOO_SOCKET_IFNAME=hsn
 
 export MASTER_ADDR=127.0.0.1
-\1
+export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
