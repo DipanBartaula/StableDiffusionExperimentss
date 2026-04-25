@@ -1,5 +1,4 @@
 #!/bin/bash
-#!/bin/bash
 #SBATCH --job-name=soft_cat_10pct
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
