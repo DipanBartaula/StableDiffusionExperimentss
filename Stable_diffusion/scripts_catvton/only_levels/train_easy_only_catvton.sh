@@ -14,7 +14,7 @@ WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
 cd "$WORK_DIR"
-export PYTHONPATH="$WORK_DIR:$PYTHONPATH"
+export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
