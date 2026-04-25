@@ -38,6 +38,15 @@ export NCCL_CROSS_NIC=1
 export FI_CXI_ATS=0
 export GLOO_SOCKET_IFNAME=hsn
 
+# Select a concrete network interface name for Gloo/NCCL ("hsn" alone is not a valid device).
+for _if in hsn0 ib0 eth0 enp0s3 lo; do
+  if ip -o link show "$_if" >/dev/null 2>&1; then
+    export NCCL_SOCKET_IFNAME="$_if"
+    export GLOO_SOCKET_IFNAME="$_if"
+    break
+  fi
+done
+
 # For single-node training, use localhost to avoid hostname resolution issues
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
@@ -52,6 +61,7 @@ trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "
 
 echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
 echo "[DEBUG] Conda env=$CONDA_ENV_NAME CONDA_PREFIX=${CONDA_PREFIX:-unset}"
+echo "[DEBUG] NCCL_SOCKET_IFNAME=$NCCL_SOCKET_IFNAME GLOO_SOCKET_IFNAME=$GLOO_SOCKET_IFNAME"
 echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
 python -V || true
 python -c "import sys, encodings; print('[DEBUG] exe', sys.executable); print('[DEBUG] prefix', sys.prefix); print('[DEBUG] encodings', encodings.__file__)" || true
