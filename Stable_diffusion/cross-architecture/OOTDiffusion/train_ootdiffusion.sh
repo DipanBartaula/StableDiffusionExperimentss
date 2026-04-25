@@ -29,8 +29,10 @@ export FI_CXI_ATS=0
 export GLOO_SOCKET_IFNAME=hsn
 
 export MASTER_ADDR
-MASTER_ADDR="$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)-hsn0"
+MASTER_ADDR="127.0.0.1"
 export MASTER_PORT=29500
+export NCCL_DEBUG=INFO
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
 srun torchrun \
   --nnodes=1 \
