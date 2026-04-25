@@ -266,7 +266,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--resume", type=str, default=None)
     p.add_argument("--no_resume", action="store_true", default=False)
-    p.add_argument("--wandb_project", type=str, default="custom_dit_pretraining")
+    p.add_argument("--wandb_project", type=str, default="Stable_diffusion")
     p.add_argument("--disable_wandb", action="store_true", default=False)
     return p.parse_args()
 
