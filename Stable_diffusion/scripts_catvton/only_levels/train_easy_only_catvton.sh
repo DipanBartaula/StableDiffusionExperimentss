@@ -34,7 +34,7 @@ trap 'echo "[DEBUG] TORCHELASTIC_ERROR_FILE=$TORCHELASTIC_ERROR_FILE"; if [ -f "
 echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
 echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
 python -V || true
-torchrun --version || true
+python -c "import torch; print('[DEBUG] torch', torch.__version__)" || true
 nvidia-smi -L || true
 
 srun torchrun \
