@@ -13,9 +13,9 @@ set -euo pipefail
 
 WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
-TEST_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
-TRIPLET_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
-PHASE2_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
+GPUS_PER_NODE=4
+GLOBAL_BATCH_SIZE=64
+BATCH_SIZE_PER_GPU=$((GLOBAL_BATCH_SIZE / GPUS_PER_NODE))
 
 cd "$WORK_DIR"
 
@@ -35,6 +35,8 @@ conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
+export WANDB_PROJECT=Stable_diffusion
+export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
@@ -59,10 +61,11 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
 srun torchrun \
   --nnodes=1 \
-  --nproc_per_node=4 \
+  --nproc_per_node=$GPUS_PER_NODE \
   --standalone \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum soft --stage_epochs 10 --max_steps 12000 --epochs 30 --data_fraction 0.20 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_soft_curriculum_catvton_20pct
+  train.py --dataset curvton --curriculum soft --stage_steps 4000 --max_steps 12000 --epochs 30 --data_fraction 0.20 --curvton_data_path ${DATA_DIR} --batch_size ${BATCH_SIZE_PER_GPU} --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_soft_curriculum_catvton_20pct
+
 
 
 

@@ -32,6 +32,8 @@ conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
+export WANDB_PROJECT=Stable_diffusion
+export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
@@ -59,7 +61,8 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum none --stage_steps 4800 --max_steps 14400 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_no_curriculum_catvton_14400steps
+  train.py --dataset curvton --curriculum none --stage_steps 4800 --max_steps 14400 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_no_curriculum_catvton_14400steps
+
 
 
 

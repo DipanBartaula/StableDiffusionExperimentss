@@ -37,6 +37,8 @@ conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${WORK_DIR}:${WORK_DIR}/cross-architecture:${PYTHONPATH:-}"
+export WANDB_PROJECT=Stable_diffusion
+export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
@@ -72,7 +74,7 @@ srun torchrun \
   --master_port=$MASTER_PORT \
   cross-architecture/IDMVTON/train_idm_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
-  --batch_size 8 \
+  --batch_size 16 \
   --num_workers 8 \
   --max_steps 14400 \
   --save_interval 1000 \

@@ -321,7 +321,7 @@ def train(args):
 
     if is_main:
         wandb.login(key=WANDB_API_KEY)
-        weave.init(f"{WANDB_ENTITY}/{WANDB_PROJECT}")
+        weave.init(f"{os.getenv('WANDB_ENTITY', WANDB_ENTITY)}/{os.getenv('WANDB_PROJECT', WANDB_PROJECT)}")
         print(f"Device: {device}  |  rank={rank}/{world_size}  |  dtype: {dtype}")
 
     if device.type == "cuda":
@@ -540,7 +540,7 @@ def train(args):
     # ── WandB ───────────────────────────────────────────────────
     if is_main:
         run = wandb.init(
-            project=WANDB_PROJECT, entity=WANDB_ENTITY,
+            project=os.getenv("WANDB_PROJECT", WANDB_PROJECT), entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
             id=run_name,
             resume="allow",
             config={

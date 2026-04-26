@@ -19,7 +19,7 @@ WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusio
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-/iopsstor/scratch/cscs/dbartaula/experiments_assets}"
 CPVTON_STAGE="${CPVTON_STAGE:-GMM}"   # GMM or TOM
-CPVTON_RUN_NAME="${CPVTON_RUN_NAME:-cpvton_${CPVTON_STAGE,,}_bs32}"
+CPVTON_RUN_NAME="${CPVTON_RUN_NAME:-cpvton_${CPVTON_STAGE,,}_bs16}"
 
 if [[ "${CPVTON_STAGE}" != "GMM" && "${CPVTON_STAGE}" != "TOM" ]]; then
   echo "ERROR: CPVTON_STAGE must be GMM or TOM (got: ${CPVTON_STAGE})"
@@ -44,6 +44,8 @@ conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${WORK_DIR}:${WORK_DIR}/cross-architecture:${PYTHONPATH:-}"
+export WANDB_PROJECT=Stable_diffusion
+export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
@@ -80,7 +82,7 @@ srun torchrun \
   cross-architecture/CPVTON/train_cpvton_local.py \
   --stage "${CPVTON_STAGE}" \
   --curvton_data_path "${DATA_DIR}" \
-  --batch_size 32 \
+  --batch_size 16 \
   --num_workers 8 \
   --max_steps 14400 \
   --save_interval 1000 \

@@ -33,6 +33,8 @@ conda activate "$CONDA_ENV_NAME"
 
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
+export WANDB_PROJECT=Stable_diffusion
+export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB
@@ -60,7 +62,8 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train_tryongan.py --dataset triplet --triplet_train_data_path ${TRIPLET_TRAIN_DIR} --triplet_test_data_path ${TRIPLET_TEST_DIR} --curriculum none --max_steps 20000 --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_triplet_only_tryongan
+  train_tryongan.py --dataset triplet --triplet_train_data_path ${TRIPLET_TRAIN_DIR} --triplet_test_data_path ${TRIPLET_TEST_DIR} --curriculum none --max_steps 20000 --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_triplet_only_tryongan
+
 
 
 

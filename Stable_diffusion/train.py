@@ -99,7 +99,7 @@ def train(args):
             try:
                 wandb.login(key=WANDB_API_KEY)
                 if weave is not None:
-                    weave.init(f'{WANDB_ENTITY}/{WANDB_PROJECT}')
+                    weave.init(f"{os.getenv('WANDB_ENTITY', WANDB_ENTITY)}/{os.getenv('WANDB_PROJECT', WANDB_PROJECT)}")
                 wandb_enabled = True
             except Exception as _we:
                 print(f"[WARN] W&B init failed, disabling logging: {_we}")
@@ -376,8 +376,8 @@ def train(args):
     # WandB (rank 0 only)
     if is_main and wandb_enabled:
         run = wandb.init(
-            project=WANDB_PROJECT,
-            entity=WANDB_ENTITY,
+            project=os.getenv("WANDB_PROJECT", WANDB_PROJECT),
+            entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
             id=run_name,
             resume="allow",
             config={

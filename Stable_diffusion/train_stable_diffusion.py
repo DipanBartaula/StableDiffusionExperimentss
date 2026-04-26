@@ -877,7 +877,7 @@ def _subsample_dataset(dataset, fraction, seed=42):
 # ============================================================
 def train(args):
     wandb.login(key=WANDB_API_KEY)
-    weave.init(f'{WANDB_ENTITY}/{WANDB_PROJECT}')
+    weave.init(f"{os.getenv('WANDB_ENTITY', WANDB_ENTITY)}/{os.getenv('WANDB_PROJECT', WANDB_PROJECT)}")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
@@ -1007,8 +1007,8 @@ def train(args):
 
     # WandB
     run = wandb.init(
-        project=WANDB_PROJECT,
-        entity=WANDB_ENTITY,
+        project=os.getenv("WANDB_PROJECT", WANDB_PROJECT),
+        entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
         config={
             "lr": args.lr,
             "batch_size": args.batch_size,
