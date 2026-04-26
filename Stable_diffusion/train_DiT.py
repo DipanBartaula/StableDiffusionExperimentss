@@ -437,7 +437,7 @@ def train(args):
         print(f"✓ DataLoader ({dataset_label}): {batches_per_epoch} batches/epoch")
 
     # ── Experiments directory ────────────────────────────────────
-    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_assets_1"
+    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_assets"
     experiments_dir = os.path.join(_EXPERIMENTS_ROOT, run_name)
     ckpt_dir = os.path.join(experiments_dir, "checkpoints")
     if is_main:
@@ -587,7 +587,7 @@ def train(args):
         ckpt_to_load = args.resume
         print(f"\n▶ --resume specified: {ckpt_to_load}")
     elif not args.no_resume:
-        _exp_ckpt_dir = os.path.join("/iopsstor/scratch/cscs/dbartaula/experiments_assets_1", run_name, "checkpoints")
+        _exp_ckpt_dir = os.path.join("/iopsstor/scratch/cscs/dbartaula/experiments_assets", run_name, "checkpoints")
         candidates = (
             glob.glob(os.path.join(_exp_ckpt_dir, "ckpt_step_*.pt"))
             + glob.glob(os.path.join(_exp_ckpt_dir, "ckpt_final.pt"))

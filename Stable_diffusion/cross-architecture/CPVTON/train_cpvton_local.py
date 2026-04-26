@@ -12,6 +12,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.cuda.amp import autocast, GradScaler
 from torch.optim import Adam
 
 from common import (
@@ -121,6 +122,7 @@ def train_gmm(args, dist_info):
     model = wrap_ddp(GMM(), dist_info)
     loader, sampler = build_curvton_loader(args, dist_info)
     optimizer = Adam(model.parameters(), lr=args.lr)
+    scaler = GradScaler(enabled=(dist_info.device.type == "cuda"))
     run_dir = os.path.join(args.output_dir, args.run_name)
     os.makedirs(run_dir, exist_ok=True)
     ckpt_to_load = args.resume
@@ -140,16 +142,18 @@ def train_gmm(args, dist_info):
             sampler.set_epoch(step)
         for batch in loader:
             person, cloth, gt = batch_images(batch, dist_info.device)
-            warped, _, theta = model(person, cloth)
-            loss_warp = F.l1_loss(warped, gt)
-            identity = model.module.grid_gen.ctrl if hasattr(model, "module") else model.grid_gen.ctrl
-            identity = identity.to(theta.device, theta.dtype).unsqueeze(0).expand_as(theta)
-            loss_reg = F.mse_loss(theta, identity)
-            loss = loss_warp + args.lambda_reg * loss_reg
+            with autocast(enabled=(dist_info.device.type == "cuda")):
+                warped, _, theta = model(person, cloth)
+                loss_warp = F.l1_loss(warped, gt)
+                identity = model.module.grid_gen.ctrl if hasattr(model, "module") else model.grid_gen.ctrl
+                identity = identity.to(theta.device, theta.dtype).unsqueeze(0).expand_as(theta)
+                loss_reg = F.mse_loss(theta, identity)
+                loss = loss_warp + args.lambda_reg * loss_reg
 
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             step += 1
             if dist_info.is_main and step % args.save_interval == 0:
@@ -173,6 +177,7 @@ def train_tom(args, dist_info):
     model = wrap_ddp(TOM(), dist_info)
     loader, sampler = build_curvton_loader(args, dist_info)
     optimizer = Adam(model.parameters(), lr=args.lr)
+    scaler = GradScaler(enabled=(dist_info.device.type == "cuda"))
     ckpt_to_load = args.resume
     if ckpt_to_load is None and not args.no_resume:
         ckpt_to_load = latest_stage_checkpoint(run_dir, "tom")
@@ -194,16 +199,18 @@ def train_tom(args, dist_info):
             person_agnostic = person * (1 - mask)
             with torch.no_grad():
                 warped, _, _ = gmm(person, cloth)
-            final, rendered, comp_mask = model(person_agnostic, warped)
-            loss = (
-                args.lambda_l1 * F.l1_loss(final, gt)
-                + args.lambda_render * F.l1_loss(rendered, gt)
-                + args.lambda_mask_tv * tv_loss(comp_mask)
-            )
+            with autocast(enabled=(dist_info.device.type == "cuda")):
+                final, rendered, comp_mask = model(person_agnostic, warped)
+                loss = (
+                    args.lambda_l1 * F.l1_loss(final, gt)
+                    + args.lambda_render * F.l1_loss(rendered, gt)
+                    + args.lambda_mask_tv * tv_loss(comp_mask)
+                )
 
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             step += 1
             if dist_info.is_main and step % args.save_interval == 0:

@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
+from torch.cuda.amp import autocast, GradScaler
 from torch.optim import AdamW
 from transformers import (
     CLIPImageProcessor,
@@ -203,6 +204,7 @@ def train(args):
     model.unet = wrap_ddp(model.unet, dist_info)
     loader, sampler = build_curvton_loader(args, dist_info)
     optimizer = AdamW(model.unet.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scaler = GradScaler(enabled=(dist_info.device.type == "cuda"))
 
     run_dir = os.path.join(args.output_dir, args.run_name)
     os.makedirs(run_dir, exist_ok=True)
@@ -243,13 +245,15 @@ def train(args):
             noisy = model.scheduler.add_noise(target_lat, noise, timesteps)
             captions = ["model is wearing a garment"] * target_lat.shape[0]
             cloth_captions = ["a photo of a garment"] * target_lat.shape[0]
-            pred = model(noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps, captions, cloth_captions)
-            target = noise if model.scheduler.config.prediction_type == "epsilon" else model.scheduler.get_velocity(target_lat, noise, timesteps)
-            loss = F.mse_loss(pred.float(), target.float())
+            with autocast(enabled=(dist_info.device.type == "cuda")):
+                pred = model(noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps, captions, cloth_captions)
+                target = noise if model.scheduler.config.prediction_type == "epsilon" else model.scheduler.get_velocity(target_lat, noise, timesteps)
+                loss = F.mse_loss(pred.float(), target.float())
 
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             step += 1
             if dist_info.is_main and step % args.save_interval == 0:

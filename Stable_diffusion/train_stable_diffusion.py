@@ -906,6 +906,11 @@ def train(args):
         run_name = f"{args.dataset}_attention_only_bs{args.batch_size}_{args.curriculum}"
     else:
         run_name = f"{args.dataset}_full_unet_bs{args.batch_size}_{args.curriculum}"
+
+    experiments_root = "/iopsstor/scratch/cscs/dbartaula/experiments_assets"
+    if args.checkpoint_dir == ".":
+        args.checkpoint_dir = os.path.join(experiments_root, run_name, "checkpoints")
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
     
     # Print trainable parameters
     trainable_params = print_trainable_params(model, args.train_mode)
@@ -1228,7 +1233,10 @@ def train(args):
             
             # Save checkpoint
             if global_step > 0 and global_step % args.save_interval == 0:
-                ckpt_path = f"checkpoint_vitonhd_{args.train_mode}_step_{global_step}.pt"
+                ckpt_path = os.path.join(
+                    args.checkpoint_dir,
+                    f"checkpoint_vitonhd_{args.train_mode}_step_{global_step}.pt",
+                )
                 torch.save({
                     'step': global_step,
                     'epoch': epoch,
@@ -1263,7 +1271,7 @@ def train(args):
         print(f"\nEpoch {epoch+1} complete. Avg Loss: {avg_loss:.6f}")
     
     # Final save
-    final_path = f"checkpoint_vitonhd_{args.train_mode}_final.pt"
+    final_path = os.path.join(args.checkpoint_dir, f"checkpoint_vitonhd_{args.train_mode}_final.pt")
     torch.save({
         'step': global_step,
         'epoch': args.epochs,

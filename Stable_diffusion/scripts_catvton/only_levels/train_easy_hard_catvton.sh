@@ -59,5 +59,7 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --difficulty easy_hard --curriculum soft --stage_steps 6000 --max_steps 12000 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --run_name train_easy_hard_soft_curriculum_catvton
+  train.py --dataset curvton --difficulty easy_hard --curriculum soft --stage_steps 6000 --max_steps 12000 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_easy_hard_catvton
+
+
 

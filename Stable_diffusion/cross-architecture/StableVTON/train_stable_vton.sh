@@ -17,7 +17,7 @@ set -euo pipefail
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
-OUT_DIR="${OUT_DIR:-${WORK_DIR}/runs/stable_vton}"
+OUT_DIR="${OUT_DIR:-/iopsstor/scratch/cscs/dbartaula/experiments_assets}"
 
 cd "${WORK_DIR}"
 
@@ -74,7 +74,9 @@ srun torchrun \
   --curvton_data_path "${DATA_DIR}" \
   --batch_size 32 \
   --num_workers 8 \
-  --max_steps 12000 \
+  --max_steps 14400 \
   --save_interval 1000 \
   --output_dir "${OUT_DIR}" \
-  --run_name train_stable_vton
+  --no_resume \\
+  --run_name Stable_diffusion_train_stable_vton
+

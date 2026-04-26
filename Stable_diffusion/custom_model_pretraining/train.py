@@ -9,6 +9,7 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
+from torch.cuda.amp import autocast, GradScaler
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
@@ -94,6 +95,7 @@ def train(args: argparse.Namespace) -> None:
     wb_run = _maybe_init_wandb(args, is_main)
 
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    scaler = GradScaler(enabled=(device.type == "cuda"))
 
     betas = make_beta_schedule(args.diffusion_steps).to(device)
     alphas = 1.0 - betas
@@ -201,12 +203,15 @@ def train(args: argparse.Namespace) -> None:
         t = torch.randint(0, args.diffusion_steps, (x0.shape[0],), device=device)
         x_t, _ = q_sample(x0, t, sqrt_ab, sqrt_1mab)
 
-        x0_pred = model(x_t, t)
-        loss = F.mse_loss(x0_pred, x0)
+        with autocast(enabled=(device.type == "cuda")):
+            x0_pred = model(x_t, t)
+            loss = F.mse_loss(x0_pred, x0)
         optimizer.zero_grad(set_to_none=True)
-        loss.backward()
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
 
         if is_main and global_step % 100 == 0:
             pbar.set_postfix(loss=f"{loss.item():.4f}")
@@ -245,7 +250,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data_path", type=str, required=True, help="CurvTon root containing easy/medium/hard")
     p.add_argument("--phase2_data_path", type=str, default=None, help="Optional final-stage dataset path")
     p.add_argument("--phase2_start_step", type=int, default=28801)
-    p.add_argument("--output_dir", type=str, default="/iopsstor/scratch/cscs/dbartaula/custom_dit_assets")
+    p.add_argument("--output_dir", type=str, default="/iopsstor/scratch/cscs/dbartaula/experiments_assets")
     p.add_argument("--curriculum", type=str, default="soft", choices=["none", "soft", "reverse", "hard"])
     p.add_argument("--stage_steps", type=int, default=4000)
     p.add_argument("--max_steps", type=int, default=12000)

@@ -266,7 +266,7 @@ def train(args):
         print(f"✓ DataLoader ({dataset_label}): {batches_per_epoch} batches/epoch per GPU")
 
     # ── Experiments directory ────────────────────────────────────
-    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_assets_1"
+    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_assets"
     experiments_dir = os.path.join(_EXPERIMENTS_ROOT, run_name)
     ckpt_dir = os.path.join(experiments_dir, "checkpoints")
     if is_main:
@@ -428,7 +428,7 @@ def train(args):
         print(f"\n▶ --resume specified: {ckpt_to_load}")
     elif not args.no_resume:
         # Search both the legacy checkpoint_dir and the new experiments dir
-        _exp_ckpt_dir = os.path.join("/iopsstor/scratch/cscs/dbartaula/experiments_assets_1", run_name, "checkpoints")
+        _exp_ckpt_dir = os.path.join("/iopsstor/scratch/cscs/dbartaula/experiments_assets", run_name, "checkpoints")
         candidates = (
             glob.glob(os.path.join(_exp_ckpt_dir, "ckpt_step_*.pt"))
             + glob.glob(os.path.join(_exp_ckpt_dir, "ckpt_final.pt"))

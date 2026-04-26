@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
+from torch.cuda.amp import autocast, GradScaler
 from torch.optim import AdamW
 
 from common import (
@@ -111,6 +112,7 @@ def train(args):
     model.unet = wrap_ddp(model.unet, dist_info)
     loader, sampler = build_curvton_loader(args, dist_info)
     optimizer = AdamW(model.unet.parameters(), lr=args.lr)
+    scaler = GradScaler(enabled=(dist_info.device.type == "cuda"))
 
     run_dir = os.path.join(args.output_dir, args.run_name)
     os.makedirs(run_dir, exist_ok=True)
@@ -152,16 +154,18 @@ def train(args):
                 device=target_lat.device,
             ).long()
             noisy = model.scheduler.add_noise(target_lat, noise, timesteps)
-            pred = model(noisy, mask_lat, agnostic_lat, pose_lat, timesteps)
-            denoise_loss = F.mse_loss(pred.float(), noise.float())
-            if args.use_atv_loss:
-                loss = denoise_loss + args.lambda_atv * tv_loss(pred.float() * atv_mask_lat.float())
-            else:
-                loss = denoise_loss
+            with autocast(enabled=(dist_info.device.type == "cuda")):
+                pred = model(noisy, mask_lat, agnostic_lat, pose_lat, timesteps)
+                denoise_loss = F.mse_loss(pred.float(), noise.float())
+                if args.use_atv_loss:
+                    loss = denoise_loss + args.lambda_atv * tv_loss(pred.float() * atv_mask_lat.float())
+                else:
+                    loss = denoise_loss
 
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             step += 1
             if dist_info.is_main and step % args.save_interval == 0:

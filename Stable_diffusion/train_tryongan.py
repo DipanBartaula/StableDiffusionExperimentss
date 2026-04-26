@@ -380,7 +380,7 @@ def train(args):
         print(f"\n\U0001f3f7  WandB run name: {run_name}")
 
     # ── Experiments directory ────────────────────────────────────
-    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_asset"
+    _EXPERIMENTS_ROOT = "/iopsstor/scratch/cscs/dbartaula/experiments_assets"
     experiments_dir = os.path.join(_EXPERIMENTS_ROOT, run_name)
     ckpt_dir = os.path.join(experiments_dir, "checkpoints")
     if is_main:
