@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=08:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -60,6 +60,7 @@ srun torchrun \
   --standalone \
   --master_port=$MASTER_PORT \
   custom_model_pretraining/train.py --data_path ${DATA_DIR} --curriculum soft --stage_steps 4800 --max_steps 14400 --batch_size 16 --num_workers 8 --save_interval 1000 --image_log_interval 250 --no_resume --run_name Stable_diffusion_train_custom_dit_soft_14400steps
+
 
 
 

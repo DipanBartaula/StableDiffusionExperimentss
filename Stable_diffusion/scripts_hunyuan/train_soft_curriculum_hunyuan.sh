@@ -5,7 +5,7 @@
 
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=07:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -63,6 +63,7 @@ srun torchrun \
   --standalone \
   --master_port=$MASTER_PORT \
   train_DiT.py --curriculum soft --stage_steps 10000 --max_steps 34000 --phase2_data_path ${PHASE2_DIR} --phase2_start_step 28801 --curvton_data_path ${DATA_DIR} --curvton_test_data_path ${TEST_DIR} --triplet_test_data_path ${TRIPLET_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_soft_curriculum_hunyuan
+
 
 
 

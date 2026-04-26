@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
 #SBATCH --account=a168
-#SBATCH --time=00:30:00
+#SBATCH --time=12:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -27,3 +27,4 @@ python inference_hunyuan.py \
   --output "$OUTPUT" \
   --steps 50 \
   --fp16
+

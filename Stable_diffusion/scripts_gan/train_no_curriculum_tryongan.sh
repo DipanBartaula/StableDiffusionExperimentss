@@ -5,7 +5,7 @@
 
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=08:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -63,5 +63,6 @@ srun torchrun \
   --standalone \
   --master_port=$MASTER_PORT \
   train_tryongan.py --curriculum none --max_steps 30000 --curvton_data_path ${DATA_DIR} --curvton_test_data_path ${TEST_DIR} --triplet_test_data_path ${TRIPLET_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 250 --skip_eval --no_resume --run_name Stable_diffusion_train_no_curriculum_tryongan
+
 
 
