@@ -1,0 +1,102 @@
+import argparse
+import json
+import os
+
+import torch
+
+from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+from eval_common import build_eval_loaders, evaluate_all_splits
+from model import SDModel
+from utils import decode_latents, run_full_inference
+
+
+def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if "unet_state_dict" in ckpt:
+        sd = ckpt["unet_state_dict"]
+    elif "model_state_dict" in ckpt:
+        sd = ckpt["model_state_dict"]
+    elif "state_dict" in ckpt:
+        sd = ckpt["state_dict"]
+    else:
+        sd = ckpt
+    clean = {k.removeprefix("module."): v for k, v in sd.items()}
+    unet.load_state_dict(clean, strict=False)
+    return ckpt.get("step", None)
+
+
+def build_predict_fn(model, num_inference_steps: int, ootd: bool):
+    @torch.no_grad()
+    def _predict(batch, device):
+        cloth = batch["cloth"].to(device)
+        person_img = batch.get("person", batch.get("masked_person")).to(device)
+        cond_input = cloth if ootd else torch.cat([person_img, cloth], dim=3)
+        cond_latents = model.vae.encode(cond_input).latent_dist.sample() * 0.18215
+        pred_latents = run_full_inference(model, cond_latents, num_inference_steps=num_inference_steps)
+        pred_wide = decode_latents(model.vae, pred_latents)
+        if ootd:
+            return pred_wide * 2 - 1
+        return pred_wide[:, :, :, : cloth.shape[-1]] * 2 - 1
+
+    return _predict
+
+
+def main(args):
+    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    model = SDModel().to(device)
+    model.unet.eval()
+    if args.use_init_weights:
+        print("Using initial CATVTON weights (no checkpoint load).")
+    else:
+        if not args.checkpoint:
+            raise ValueError("--checkpoint is required unless --use_init_weights is set.")
+        step = _load_unet_checkpoint(model.unet, args.checkpoint, device)
+        if step is None:
+            print(f"Loaded checkpoint: {args.checkpoint}")
+        else:
+            print(f"Loaded checkpoint: {args.checkpoint} (step={step})")
+
+    loaders = build_eval_loaders(
+        curvton_test_data_path=args.curvton_test_data_path,
+        triplet_test_data_path=args.triplet_test_data_path,
+        street_tryon_data_path=args.street_tryon_data_path,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        gender=args.gender,
+        street_split=args.street_split,
+    )
+    results = evaluate_all_splits(
+        loaders=loaders,
+        predict_fn=build_predict_fn(model, args.num_inference_steps, args.ootd),
+        device=device,
+        max_batches=args.max_batches,
+        eval_frac_curvton=args.eval_frac_curvton,
+        eval_frac_triplet=args.eval_frac_triplet,
+        eval_frac_street=args.eval_frac_street,
+    )
+    if args.output_json:
+        with open(args.output_json, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print(f"\nSaved metrics JSON to: {args.output_json}")
+
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser("Evaluate CATVTON on CurvTON/Triplet/StreetTryOn")
+    p.add_argument("--checkpoint", type=str, default=None)
+    p.add_argument("--curvton_test_data_path", type=str, default=CURVTON_TEST_PATH)
+    p.add_argument("--triplet_test_data_path", type=str, default=TRIPLET_TEST_PATH)
+    p.add_argument("--street_tryon_data_path", type=str, default=STREET_TRYON_PATH)
+    p.add_argument("--street_split", type=str, default="validation", choices=["train", "validation"])
+    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument("--num_workers", type=int, default=8)
+    p.add_argument("--num_inference_steps", type=int, default=30)
+    p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
+    p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
+    p.add_argument("--eval_frac_curvton", type=float, default=0.10)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.30)
+    p.add_argument("--eval_frac_street", type=float, default=0.30)
+    p.add_argument("--ootd", action="store_true", default=False)
+    p.add_argument("--use_init_weights", action="store_true", default=False)
+    p.add_argument("--device", type=str, default=None)
+    p.add_argument("--output_json", type=str, default=None)
+    main(p.parse_args())
