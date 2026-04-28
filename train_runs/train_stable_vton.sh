@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 #SBATCH --job-name=stable_vton
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
