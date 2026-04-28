@@ -79,7 +79,6 @@ srun torchrun \
   --max_steps 28000 \
   --save_interval 1000 \
   --output_dir "${OUT_DIR}" \
-  --no_resume
+  --no_resume \
   --run_name Stable_diffusion_train_idm_vton
-
 
