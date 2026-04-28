@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 #SBATCH --job-name=custom_dit_pretrain
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -74,3 +74,4 @@ srun torchrun \
   --image_log_interval 1000 \
   --no_resume \
   --run_name Stable_diffusion_train_custom_dit_soft_12000steps
+
