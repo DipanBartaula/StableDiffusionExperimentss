@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ootd
+#SBATCH --job-name=stable_vton
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
@@ -10,10 +10,10 @@
 
 set -euo pipefail
 
-# OOTDiffusion local implementation aligned to the paper-level architecture/loss.
-# Official repo: https://github.com/levihsu/OOTDiffusion
-# Architecture: latent diffusion with outfitting-fusion person/garment latents.
-# Loss: diffusion denoising objective on predicted noise.
+# StableVITON local implementation aligned to the official architecture/loss.
+# Repo: https://github.com/rlawjdghek/StableVITON
+# Architecture: latent diffusion VTON with modified UNet input channels.
+# Loss: denoising objective + optional ATV loss in finetune stage.
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
@@ -60,19 +60,25 @@ export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
+
+echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
+echo "[DEBUG] Conda env=$CONDA_ENV_NAME CONDA_PREFIX=${CONDA_PREFIX:-unset}"
+echo "[DEBUG] NCCL_SOCKET_IFNAME=$NCCL_SOCKET_IFNAME GLOO_SOCKET_IFNAME=$GLOO_SOCKET_IFNAME"
+echo "[DEBUG] Python=$(which python || true) Torchrun=$(which torchrun || true)"
+python -V || true
+
 srun torchrun \
   --nnodes=1 \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  cross-architecture/OOTDiffusion/train_ootdiffusion_local.py \
+  cross-architecture/StableVTON/train_stable_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
   --batch_size 16 \
   --num_workers 8 \
-  --max_steps 30000 \
+  --max_steps 28000 \
   --save_interval 1000 \
   --output_dir "${OUT_DIR}" \
   --no_resume
-  --run_name Stable_diffusion_train_ootdiffusion
-
+  --run_name Stable_diffusion_train_stable_vton
 

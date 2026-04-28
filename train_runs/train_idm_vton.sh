@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=stable_vton
+#SBATCH --job-name=idm_vton
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
@@ -10,10 +10,10 @@
 
 set -euo pipefail
 
-# StableVITON local implementation aligned to the official architecture/loss.
-# Repo: https://github.com/rlawjdghek/StableVITON
-# Architecture: latent diffusion VTON with modified UNet input channels.
-# Loss: denoising objective + optional ATV loss in finetune stage.
+# IDM-VTON local implementation aligned to the official architecture/loss.
+# Repo: https://github.com/yisol/IDM-VTON
+# Architecture: SDXL inpainting-style UNet with garment conditioning.
+# Loss: diffusion denoising objective on predicted noise (epsilon), with scheduler weighting.
 
 WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
@@ -72,13 +72,14 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  cross-architecture/StableVTON/train_stable_vton_local.py \
+  cross-architecture/IDMVTON/train_idm_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
   --batch_size 16 \
   --num_workers 8 \
-  --max_steps 30000 \
+  --max_steps 28000 \
   --save_interval 1000 \
   --output_dir "${OUT_DIR}" \
   --no_resume
-  --run_name Stable_diffusion_train_stable_vton
+  --run_name Stable_diffusion_train_idm_vton
+
 
