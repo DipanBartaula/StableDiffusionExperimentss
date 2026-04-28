@@ -15,7 +15,15 @@ from tqdm import tqdm
 
 from dataloader import build_curvton_difficulty_files, build_phase2_triplet_files, make_loader, subset_files
 from model import DiT250M, DiTConfig, count_parameters
-from utils import curriculum_weights, ensure_dir, make_beta_schedule, q_sample, sample_ddim_like, save_batch_preview
+from utils import (
+    curriculum_weights,
+    ensure_dir,
+    make_beta_schedule,
+    make_cosine_timestep_weights,
+    q_sample,
+    sample_ddim_like,
+    save_batch_preview,
+)
 
 try:
     import wandb  # type: ignore
@@ -133,6 +141,7 @@ def train(args: argparse.Namespace) -> None:
     alpha_bar = torch.cumprod(alphas, dim=0)
     sqrt_ab = torch.sqrt(alpha_bar)
     sqrt_1mab = torch.sqrt(1 - alpha_bar)
+    timestep_weights = make_cosine_timestep_weights(args.diffusion_steps, device)
 
     diff_files = build_curvton_difficulty_files(args.data_path, gender=args.gender)
     for k in diff_files:
@@ -237,7 +246,7 @@ def train(args: argparse.Namespace) -> None:
             batch = _next_from(iters, diff_loaders, diff)
             cond_vis, x0 = _catvton_wide_tensors(batch, device)
 
-        t = torch.randint(0, args.diffusion_steps, (x0.shape[0],), device=device)
+        t = torch.multinomial(timestep_weights, x0.shape[0], replacement=True)
         x_t, _ = q_sample(x0, t, sqrt_ab, sqrt_1mab)
 
         with autocast(enabled=(device.type == "cuda")):

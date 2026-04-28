@@ -15,7 +15,6 @@ for p in (STABLE_DIR, CROSS_ARCH_DIR):
 
 from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
-from common import latest_checkpoint  # noqa: E402
 from train_idm_vton_local import IDMVTONModel  # noqa: E402
 
 
@@ -47,16 +46,14 @@ def main(args):
 
     if args.use_init_weights:
         print("Using initial IDM-VTON weights (no checkpoint load).")
-    else:
-        run_dir = os.path.join(args.output_dir, args.run_name)
-        ckpt_path = args.checkpoint or latest_checkpoint(run_dir)
-        if ckpt_path is None:
-            raise FileNotFoundError(f"No checkpoint found in {run_dir}")
-        ckpt = torch.load(ckpt_path, map_location=device)
+    elif args.checkpoint:
+        ckpt = torch.load(args.checkpoint, map_location=device)
         model.unet.load_state_dict(ckpt["unet_state_dict"])
         if "image_proj_state_dict" in ckpt:
             model.image_proj_model.load_state_dict(ckpt["image_proj_state_dict"])
-        print(f"Loaded checkpoint: {ckpt_path}")
+        print(f"Loaded checkpoint: {args.checkpoint}")
+    else:
+        print("Using initial IDM-VTON weights (no checkpoint load).")
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
         triplet_test_data_path=args.triplet_test_data_path,
@@ -75,6 +72,7 @@ def main(args):
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
     )
+    print("\nEvaluation metrics:\n" + json.dumps(results, indent=2))
     if args.output_json:
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)

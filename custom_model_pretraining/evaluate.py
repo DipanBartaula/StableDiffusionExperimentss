@@ -54,11 +54,14 @@ def main(args):
     if args.use_init_weights:
         cfg = DiTConfig()
         ckpt = None
-    else:
-        if not args.checkpoint:
-            raise ValueError("--checkpoint is required unless --use_init_weights is set.")
+        print("Using initial custom DiT weights (no checkpoint load).")
+    elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location=device)
         cfg = _load_cfg(ckpt.get("cfg", {}))
+    else:
+        cfg = DiTConfig()
+        ckpt = None
+        print("Using initial custom DiT weights (no checkpoint load).")
     model = DiT250M(cfg).to(device).eval()
     if ckpt is not None:
         model.load_state_dict(ckpt["model"], strict=True)
@@ -90,6 +93,7 @@ def main(args):
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
     )
+    print("\nEvaluation metrics:\n" + json.dumps(results, indent=2))
     if args.output_json:
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)

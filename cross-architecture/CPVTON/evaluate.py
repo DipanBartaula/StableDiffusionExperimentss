@@ -14,7 +14,6 @@ for p in (STABLE_DIR, CROSS_ARCH_DIR):
 
 from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
-from common import latest_stage_checkpoint  # noqa: E402
 from train_cpvton_local import GMM, TOM  # noqa: E402
 
 
@@ -41,22 +40,17 @@ def main(args):
     tom = TOM().to(device).eval() if args.stage == "TOM" else None
     if args.use_init_weights:
         print("Using initial CPVTON weights (no checkpoint load).")
-    else:
-        run_dir = os.path.join(args.output_dir, args.run_name)
-        gmm_ckpt = args.gmm_checkpoint or latest_stage_checkpoint(run_dir, "gmm")
-        if gmm_ckpt is None:
-            raise FileNotFoundError(f"No GMM checkpoint found in {run_dir}")
-        gmm_state = torch.load(gmm_ckpt, map_location=device)
-        gmm.load_state_dict(gmm_state["model_state_dict"], strict=False)
-        print(f"Loaded GMM checkpoint: {gmm_ckpt}")
-
-        if args.stage == "TOM":
-            tom_ckpt = args.tom_checkpoint or latest_stage_checkpoint(run_dir, "tom")
-            if tom_ckpt is None:
-                raise FileNotFoundError(f"No TOM checkpoint found in {run_dir}")
-            tom_state = torch.load(tom_ckpt, map_location=device)
+    elif args.gmm_checkpoint or args.tom_checkpoint:
+        if args.gmm_checkpoint:
+            gmm_state = torch.load(args.gmm_checkpoint, map_location=device)
+            gmm.load_state_dict(gmm_state["model_state_dict"], strict=False)
+            print(f"Loaded GMM checkpoint: {args.gmm_checkpoint}")
+        if args.stage == "TOM" and args.tom_checkpoint:
+            tom_state = torch.load(args.tom_checkpoint, map_location=device)
             tom.load_state_dict(tom_state["model_state_dict"], strict=False)
-            print(f"Loaded TOM checkpoint: {tom_ckpt}")
+            print(f"Loaded TOM checkpoint: {args.tom_checkpoint}")
+    else:
+        print("Using initial CPVTON weights (no checkpoint load).")
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
@@ -76,6 +70,7 @@ def main(args):
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
     )
+    print("\nEvaluation metrics:\n" + json.dumps(results, indent=2))
     if args.output_json:
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)

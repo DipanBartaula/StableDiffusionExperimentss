@@ -23,6 +23,12 @@ def make_beta_schedule(num_steps: int, beta_start: float = 1e-4, beta_end: float
     return torch.linspace(beta_start, beta_end, num_steps)
 
 
+def make_cosine_timestep_weights(num_steps: int, device: torch.device) -> torch.Tensor:
+    steps = torch.arange(num_steps, device=device, dtype=torch.float32)
+    weights = torch.sin(math.pi * (steps + 0.5) / num_steps)
+    return weights / weights.sum()
+
+
 def extract(a: torch.Tensor, t: torch.Tensor, x_shape: torch.Size) -> torch.Tensor:
     out = a.gather(-1, t)
     while out.dim() < len(x_shape):

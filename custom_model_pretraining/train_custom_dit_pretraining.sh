@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -65,7 +65,7 @@ srun torchrun \
   --model_size 400m \
   --curriculum soft \
   --stage_steps 4000 \
-  --max_steps 12000 \
+  --max_steps 30000 \
   --data_path ${DATA_DIR} \
   --batch_size 16 \
   --num_workers 8 \

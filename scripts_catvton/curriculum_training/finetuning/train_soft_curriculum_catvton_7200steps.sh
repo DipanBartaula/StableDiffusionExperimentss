@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -61,7 +61,7 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum soft --stage_steps 2400 --max_steps 7200 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_soft_curriculum_catvton_7200steps
+  train.py --dataset curvton --curriculum soft --stage_steps 2400 --max_steps 30000 --curvton_data_path ${DATA_DIR} --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_soft_curriculum_catvton_7200steps
 
 
 

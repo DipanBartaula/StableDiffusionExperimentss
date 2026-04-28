@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -84,7 +84,7 @@ srun torchrun \
   --curvton_data_path "${DATA_DIR}" \
   --batch_size 16 \
   --num_workers 8 \
-  --max_steps 14400 \
+  --max_steps 30000 \
   --save_interval 1000 \
   --output_dir "${OUT_DIR}" \
   --no_resume \\

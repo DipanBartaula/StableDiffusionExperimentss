@@ -45,16 +45,14 @@ def main(args):
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     model = SDModel().to(device)
     model.unet.eval()
-    if args.use_init_weights:
-        print("Using initial CATVTON weights (no checkpoint load).")
-    else:
-        if not args.checkpoint:
-            raise ValueError("--checkpoint is required unless --use_init_weights is set.")
+    if args.checkpoint:
         step = _load_unet_checkpoint(model.unet, args.checkpoint, device)
         if step is None:
             print(f"Loaded checkpoint: {args.checkpoint}")
         else:
             print(f"Loaded checkpoint: {args.checkpoint} (step={step})")
+    else:
+        print("Using initial CATVTON weights (no checkpoint load).")
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
@@ -74,6 +72,7 @@ def main(args):
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
     )
+    print("\nEvaluation metrics:\n" + json.dumps(results, indent=2))
     if args.output_json:
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)

@@ -5,7 +5,7 @@
 
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -62,7 +62,7 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train_tryongan.py --dataset triplet --triplet_train_data_path ${TRIPLET_TRAIN_DIR} --triplet_test_data_path ${TRIPLET_TEST_DIR} --curriculum none --max_steps 20000 --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_triplet_only_tryongan
+  train_tryongan.py --dataset triplet --triplet_train_data_path ${TRIPLET_TRAIN_DIR} --triplet_test_data_path ${TRIPLET_TEST_DIR} --curriculum none --max_steps 30000 --batch_size 16 --num_workers 8 --gender all --save_interval 1000 --image_log_interval 1000 --skip_eval --no_resume --run_name Stable_diffusion_train_triplet_only_tryongan
 
 
 

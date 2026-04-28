@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=cdit_dp400_12000
+#SBATCH --job-name=cdit_mf400_30000
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
-#SBATCH --time=12:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -40,20 +40,19 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  custom_model_pretraining/train.py \
+  custom_model_pretraining/train_meanflow.py \
     --model_size 400m \
     --data_path ${DATA_DIR} \
     --phase2_data_path ${PHASE2_DIR} \
     --phase2_start_step 10000 \
     --curriculum soft \
     --stage_steps 4000 \
-    --max_steps 12000 \
+    --max_steps 30000 \
     --batch_size 16 \
     --num_workers 8 \
     --save_interval 1000 \
     --image_log_interval 1000 \
-    --inference_steps 50 \
     --gender all \
-    --run_name Stable_diffusion_train_custom_dit_datapred_400m_12000steps \
+    --run_name Stable_diffusion_train_custom_dit_meanflow_400m_30000steps \
     --wandb_project Stable_diffusion
 

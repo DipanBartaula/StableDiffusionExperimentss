@@ -111,6 +111,10 @@ class DiT250M(nn.Module):
         )
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_tokens, cfg.hidden_size))
         self.time_embed = TimestepEmbedder(cfg.hidden_size)
+        self.input_mod = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(cfg.hidden_size, 2 * cfg.hidden_size),
+        )
         self.blocks = nn.ModuleList(
             [DiTBlock(cfg.hidden_size, cfg.num_heads, cfg.mlp_ratio) for _ in range(cfg.depth)]
         )
@@ -136,6 +140,8 @@ class DiT250M(nn.Module):
         x = x.flatten(2).transpose(1, 2)  # [B, N, D]
         x = x + self.pos_embed
         t = self.time_embed(timesteps)
+        shift, scale = self.input_mod(t).chunk(2, dim=1)
+        x = _modulate(x, shift, scale)
         for block in self.blocks:
             x = block(x, t)
         x = self.final(x, t)
