@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 #SBATCH --job-name=stable_vton
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -74,7 +74,7 @@ srun torchrun \
   --master_port=$MASTER_PORT \
   cross-architecture/StableVTON/train_stable_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
-  --batch_size 16 \
+  --batch_size 8 \
   --num_workers 8 \
   --max_steps 28000 \
   --save_interval 1000 \
