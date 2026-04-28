@@ -4,7 +4,12 @@ import os
 
 import torch
 
-from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+try:
+    from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+except Exception:
+    CURVTON_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
+    TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
+    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/street_tryon"
 from eval_common import build_eval_loaders, evaluate_all_splits
 from model import SDModel
 from utils import decode_latents, run_full_inference

@@ -24,7 +24,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from config import IMAGE_SIZE  # noqa: E402
+try:
+    from config import IMAGE_SIZE  # noqa: E402
+except Exception:
+    IMAGE_SIZE = (512, 384)
 from utils import CombinedCurvtonDataset, CurvtonDataset, collate_fn  # noqa: E402
 
 

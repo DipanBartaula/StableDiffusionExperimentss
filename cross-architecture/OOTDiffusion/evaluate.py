@@ -12,7 +12,12 @@ for p in (STABLE_DIR, CROSS_ARCH_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
+try:
+    from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
+except Exception:
+    CURVTON_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
+    TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
+    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/street_tryon"
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_ootdiffusion_local import OOTDiffusionModel  # noqa: E402
 
