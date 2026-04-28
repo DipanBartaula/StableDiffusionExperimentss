@@ -79,6 +79,11 @@ export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export TORCH_SHOW_CPP_STACKTRACES=1
+export TORCH_CPP_LOG_LEVEL=INFO
+export PYTHONFAULTHANDLER=1
+LOG_DIR="${WORK_DIR}/logs/torchrun_${SLURM_JOB_ID}"
+mkdir -p "${LOG_DIR}"
 
 echo "[DEBUG] Host=$(hostname) JobID=${SLURM_JOB_ID:-unknown}"
 echo "[DEBUG] Conda env=$CONDA_ENV_NAME CONDA_PREFIX=${CONDA_PREFIX:-unset}"
@@ -108,6 +113,9 @@ srun env -u PYTHONHOME -u PYTHONPATH \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
+  --log-dir "${LOG_DIR}" \
+  --redirects 3 \
+  --tee 3 \
   cross-architecture/IDMVTON/train_idm_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
   --batch_size 8 \
