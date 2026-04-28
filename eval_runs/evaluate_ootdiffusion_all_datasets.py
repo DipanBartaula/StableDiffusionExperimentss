@@ -4,8 +4,7 @@ import json
 import re
 import subprocess
 import sys
-
-RUN_NAME = "train_ootdiffusion"
+RUN_NAME = "train_ootdiffusion"
 CKPT_DIR = Path("/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_ootdiffusion/checkpoints")
 COMMAND = [
     "python",

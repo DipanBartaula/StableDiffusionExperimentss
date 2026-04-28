@@ -4,8 +4,7 @@ import json
 import re
 import subprocess
 import sys
-
-RUN_NAME = 'Stable_diffusion_train_custom_dit_soft_12000steps'
+RUN_NAME = 'Stable_diffusion_train_custom_dit_soft_12000steps'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_soft_12000steps/checkpoints')
 COMMAND = ['python', 'custom_model_pretraining/evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--triplet_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1', '--street_tryon_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/benchmark_datasets/street_tryon', '--street_split', 'validation', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.12', '--eval_frac_triplet', '0.30', '--eval_frac_street', '0.30']
 
