@@ -61,7 +61,7 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  custom_model_pretraining/train.py --model_size 250m --data_path ${DATA_DIR} --curriculum reverse --stage_steps 1200 --max_steps 30000 --batch_size 16 --num_workers 8 --save_interval 1000 --image_log_interval 1000 --no_resume --run_name Stable_diffusion_train_custom_dit_reverse_3600steps
+  custom_model_pretraining/train.py --model_size 250m --data_path ${DATA_DIR} --curriculum reverse --stage_steps 1200 --max_steps 30000 --batch_size 16 --num_workers 16 --save_interval 1000 --image_log_interval 1000 --no_resume --run_name Stable_diffusion_train_custom_dit_reverse_3600steps
 
 
 

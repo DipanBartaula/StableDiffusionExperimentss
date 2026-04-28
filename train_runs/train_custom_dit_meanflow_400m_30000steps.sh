@@ -49,7 +49,7 @@ srun torchrun \
     --stage_steps 4000 \
     --max_steps 30000 \
     --batch_size 16 \
-    --num_workers 8 \
+    --num_workers 16 \
     --save_interval 1000 \
     --image_log_interval 1000 \
     --gender all \

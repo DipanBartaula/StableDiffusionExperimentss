@@ -5,9 +5,10 @@ import re
 import subprocess
 import sys
 
-RUN_NAME = 'train_soft_curriculum_catvton_50pct'
+ = Path(__file__).resolve().parents[1]
+EVAL_SCRIPT = REPO_ROOT / 'evaluate.py'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_soft_curriculum_catvton_50pct/checkpoints')
-COMMAND = ['python', 'evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.12']
+COMMAND = ['python', str(EVAL_SCRIPT), '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.12']
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:

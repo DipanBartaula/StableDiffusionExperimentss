@@ -61,7 +61,7 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  custom_model_pretraining/train.py --model_size 250m --data_path ${DATA_DIR} --curriculum soft --stage_steps 9600 --max_steps 30000 --phase2_data_path ${PHASE2_DIR} --phase2_start_step 28801 --batch_size 16 --num_workers 8 --save_interval 1000 --image_log_interval 1000 --no_resume --run_name Stable_diffusion_train_custom_dit_soft_28800steps
+  custom_model_pretraining/train.py --model_size 250m --data_path ${DATA_DIR} --curriculum soft --stage_steps 9600 --max_steps 30000 --phase2_data_path ${PHASE2_DIR} --phase2_start_step 28801 --batch_size 16 --num_workers 16 --save_interval 1000 --image_log_interval 1000 --no_resume --run_name Stable_diffusion_train_custom_dit_soft_28800steps
 
 
 

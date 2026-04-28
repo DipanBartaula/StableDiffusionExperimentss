@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 #SBATCH --job-name=custom_dit_pretrain
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -68,7 +68,7 @@ srun torchrun \
   --max_steps 30000 \
   --data_path ${DATA_DIR} \
   --batch_size 16 \
-  --num_workers 8 \
+  --num_workers 16 \
   --gender all \
   --save_interval 1000 \
   --image_log_interval 1000 \
