@@ -54,7 +54,11 @@ def infer(args):
             person_lat = model.encode(person)
             pose_lat = model.encode(person)
             cloth_lat = model.encode(cloth)
-            person_mask = F.interpolate(person.mean(dim=1, keepdim=True), size=person_lat.shape[-2:], mode="bilinear", align_corners=False)
+            person_mask = torch.zeros(
+                person.shape[0], 1, person.shape[2], person.shape[3],
+                device=person.device, dtype=person.dtype
+            )
+            person_mask = F.interpolate(person_mask, size=person_lat.shape[-2:], mode="bilinear", align_corners=False)
             latents = torch.randn_like(person_lat)
             captions = ["model is wearing a garment"] * latents.shape[0]
             cloth_captions = ["a photo of a garment"] * latents.shape[0]

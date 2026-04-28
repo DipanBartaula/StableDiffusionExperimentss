@@ -130,7 +130,7 @@ def log_images_gan(step, batch, generator, device, ootd=False):
     with torch.no_grad():
         gt     = batch["ground_truth"].to(device)
         cloth  = batch["cloth"].to(device)
-        person_img = batch.get("person", batch.get("masked_person")).to(device)
+        person_img = batch["person"].to(device)
 
         gen_input  = _prepare_gen_input(person_img, cloth, ootd=ootd)
         gen_output = generator(gen_input)
@@ -220,7 +220,7 @@ def evaluate_on_test_gan(generator, test_loaders, device, eval_frac=0.10, ootd=F
 
             gt     = batch["ground_truth"].to(device)
             cloth  = batch["cloth"].to(device)
-            person_img = batch.get("person", batch.get("masked_person")).to(device)
+            person_img = batch["person"].to(device)
 
             gen_input  = _prepare_gen_input(person_img, cloth, ootd=ootd)
             gen_output = generator(gen_input)
@@ -751,7 +751,7 @@ def train(args):
 
             gt         = batch["ground_truth"].to(device, non_blocking=True)
             cloth      = batch["cloth"].to(device, non_blocking=True)
-            person_img = batch.get("person", batch.get("masked_person")).to(device, non_blocking=True)
+            person_img = batch["person"].to(device, non_blocking=True)
             B = gt.shape[0]
 
             gen_input = _prepare_gen_input(person_img, cloth, ootd=args.ootd)

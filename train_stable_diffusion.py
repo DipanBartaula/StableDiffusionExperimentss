@@ -729,7 +729,7 @@ def evaluate_on_test(model, test_loaders, device, num_inference_steps, eval_frac
             gt     = batch["ground_truth"].to(device)   # [B,3,H,W]  in [-1,1]
             cloth  = batch["cloth"].to(device)
             # CurvTon: 'person' = raw initial_image; VitonHD: 'masked_person'
-            person_img = batch.get("person", batch.get("masked_person")).to(device)
+            person_img = batch["person"].to(device)
 
             # Cond: cat([person, cloth], width) → [B,3,512,1024] → VAE → [B,4,64,128]
             cond_input   = torch.cat([person_img, cloth], dim=3)

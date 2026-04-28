@@ -21,7 +21,7 @@ from train_stable_vton_local import StableVTONModel, stableviton_preprocess  # n
 def build_predict_fn(model, num_inference_steps: int):
     @torch.no_grad()
     def _predict(batch, device):
-        person = batch.get("person", batch.get("masked_person")).to(device)
+        person = batch["person"].to(device)
         cloth = batch["cloth"].to(device)
         gt = batch["ground_truth"].to(device)
         prep = stableviton_preprocess(person, cloth, gt)

@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from diffusers import AutoencoderKL
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import transforms
 
@@ -26,8 +27,16 @@ try:
 except ImportError as exc:
     raise ImportError("Install torchmetrics with image extras: pip install torchmetrics[image]") from exc
 
-from config import IMAGE_SIZE
-from utils import collate_fn, get_curvton_test_dataloaders, get_triplet_test_dataloaders
+from config import IMAGE_SIZE, MODEL_NAME
+from utils import (
+    collate_fn,
+    get_curvton_test_dataloaders,
+    get_triplet_test_dataloaders,
+    _person_bbox_square_from_image,
+)
+
+
+_VAE_CACHE = {}
 
 
 def _to_01(x: torch.Tensor) -> torch.Tensor:
@@ -40,6 +49,27 @@ def _to_01(x: torch.Tensor) -> torch.Tensor:
 
 def _to_u8(x01: torch.Tensor) -> torch.Tensor:
     return (x01 * 255.0).round().clamp(0, 255).to(torch.uint8)
+
+
+def _get_metric_gt_vae(device: torch.device):
+    key = str(device)
+    if key in _VAE_CACHE:
+        return _VAE_CACHE[key]
+    vae = AutoencoderKL.from_pretrained(MODEL_NAME, subfolder="vae").to(device)
+    vae.eval()
+    vae.requires_grad_(False)
+    _VAE_CACHE[key] = vae
+    return vae
+
+
+@torch.no_grad()
+def _vae_roundtrip_gt(gt_01: torch.Tensor, device: torch.device) -> torch.Tensor:
+    vae = _get_metric_gt_vae(device)
+    gt_in = gt_01 * 2.0 - 1.0
+    latent_dist = vae.encode(gt_in).latent_dist
+    latents = latent_dist.mean * vae.config.scaling_factor
+    gt_recon = vae.decode(latents / vae.config.scaling_factor).sample
+    return _to_01(gt_recon)
 
 
 def _safe_compute(metric):
@@ -83,11 +113,18 @@ class StreetTryOnEvalDataset(Dataset):
 
     def __getitem__(self, idx):
         p = os.path.join(self.image_dir, self.files[idx])
-        img = self.tf(Image.open(p).convert("RGB"))
+        img_raw = Image.open(p).convert("RGB")
+        box = _person_bbox_square_from_image(img_raw, margin=0.15)
+        img_crop = img_raw.crop(box).resize((768, 768), Image.BICUBIC)
+        cloth_crop = transforms.CenterCrop(768)(
+            transforms.Resize(768, interpolation=transforms.InterpolationMode.BICUBIC)(img_raw)
+        )
+        img = self.tf(img_crop)
+        cloth = self.tf(cloth_crop)
         return {
             "ground_truth": img,
             "person": img,
-            "cloth": img,
+            "cloth": cloth,
             "mask": self._zero_mask,
         }
 
@@ -185,6 +222,7 @@ def evaluate_loader(
     eval_frac: float = 1.0,
     paired_metrics: bool = True,
     unpaired_metrics: bool = True,
+    apply_vae_gt_roundtrip: bool = False,
 ):
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device) if paired_metrics else None
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device) if paired_metrics else None
@@ -219,6 +257,8 @@ def evaluate_loader(
             pred = predict_fn(batch, device)
 
         gt = _to_01(batch["ground_truth"].to(device))
+        if apply_vae_gt_roundtrip:
+            gt = _vae_roundtrip_gt(gt, device)
         pred = _to_01(pred.to(device))
         if pred.shape[-2:] != gt.shape[-2:]:
             pred = F.interpolate(pred, size=gt.shape[-2:], mode="bilinear", align_corners=False)
@@ -313,6 +353,7 @@ def evaluate_all_splits(
             eval_frac=eval_frac_curvton,
             paired_metrics=True,
             unpaired_metrics=True,
+            apply_vae_gt_roundtrip=True,
         )
 
     for name, loader in loaders.triplet.items():
@@ -324,6 +365,7 @@ def evaluate_all_splits(
             eval_frac=eval_frac_triplet,
             paired_metrics=True,
             unpaired_metrics=True,
+            apply_vae_gt_roundtrip=False,
         )
 
     for name, loader in loaders.street.items():
@@ -335,6 +377,7 @@ def evaluate_all_splits(
             eval_frac=eval_frac_street,
             paired_metrics=False,
             unpaired_metrics=True,
+            apply_vae_gt_roundtrip=False,
         )
 
     summarize_group("CURVTON SPLITS + OVERALL", curvton_results)

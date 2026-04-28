@@ -90,7 +90,7 @@ def _resolve_model_preset(args: argparse.Namespace) -> Tuple[int, int, int]:
 def _catvton_wide_tensors(batch: dict, device: torch.device):
     gt = batch["ground_truth"].to(device, non_blocking=True)
     cloth = batch["cloth"].to(device, non_blocking=True)
-    person = batch.get("person", batch.get("masked_person")).to(device, non_blocking=True)
+    person = batch["person"].to(device, non_blocking=True)
     cond_input = torch.cat([person, cloth], dim=3)   # person || cloth
     target_input = torch.cat([gt, cloth], dim=3)     # gt || cloth
     return cond_input, target_input

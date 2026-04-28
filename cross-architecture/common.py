@@ -91,7 +91,7 @@ def build_curvton_loader(args, dist_info):
 def batch_images(batch, device, dtype=torch.float32):
     gt = batch["ground_truth"].to(device, dtype=dtype, non_blocking=True)
     cloth = batch["cloth"].to(device, dtype=dtype, non_blocking=True)
-    person = batch.get("person", batch.get("masked_person")).to(
+    person = batch["person"].to(
         device, dtype=dtype, non_blocking=True
     )
     return person, cloth, gt

@@ -237,7 +237,7 @@ def evaluate_on_test_hunyuan(model: HunyuanDiTModel, test_loaders, device,
                 break
             gt    = batch["ground_truth"].to(device)
             cloth = batch["cloth"].to(device)
-            person_img = batch.get("person", batch.get("masked_person")).to(device)
+            person_img = batch["person"].to(device)
 
             # Encode conditioning
             if ootd:
@@ -733,7 +733,7 @@ def train(args):
             try:
                 gt         = batch["ground_truth"].to(device, dtype=dtype, non_blocking=True)
                 cloth      = batch["cloth"].to(device, dtype=dtype, non_blocking=True)
-                person_img = batch.get("person", batch.get("masked_person")).to(
+                person_img = batch["person"].to(
                     device, dtype=dtype, non_blocking=True)
                 _train_log.debug(f"step={global_step} gt={gt.shape} cloth={cloth.shape}")
 

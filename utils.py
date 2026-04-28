@@ -22,6 +22,11 @@ except ImportError:
     def _eval_autocast(): return _eval_autocast_cls()
 from torchvision import transforms
 import wandb
+try:
+    from transformers import AutoImageProcessor, DetrForObjectDetection
+    _DETR_AVAILABLE = True
+except Exception:
+    _DETR_AVAILABLE = False
 
 logging.basicConfig(
     format="[%(asctime)s %(levelname)s %(name)s] %(message)s",
@@ -244,6 +249,120 @@ def _local_load_image(path: str) -> Image.Image:
     return Image.open(path).convert("RGB")
 
 
+_DETR_CACHE = {}
+
+
+def _person_bbox_square_from_heuristic(person_img: Image.Image, margin: float = 0.15):
+    arr = np.asarray(person_img.convert("RGB"))
+    h, w = arr.shape[:2]
+    gray = arr.mean(axis=2)
+    fg = (gray > 8) & (gray < 247)
+    ys, xs = np.where(fg)
+    if ys.size < 16 or xs.size < 16:
+        return (0, 0, w, h)
+    x0, x1 = int(xs.min()), int(xs.max())
+    y0, y1 = int(ys.min()), int(ys.max())
+    bw = max(1, x1 - x0 + 1)
+    bh = max(1, y1 - y0 + 1)
+    side = int(round(max(bw, bh) * (1.0 + margin)))
+    side = max(16, min(side, max(w, h)))
+    cx = 0.5 * (x0 + x1)
+    cy = 0.5 * (y0 + y1)
+    left = int(round(cx - side / 2))
+    top = int(round(cy - side / 2))
+    left = max(0, min(left, w - side))
+    top = max(0, min(top, h - side))
+    right = min(w, left + side)
+    bottom = min(h, top + side)
+    return (left, top, right, bottom)
+
+
+def _get_detr_detector(device: str = "cpu"):
+    key = str(device)
+    if key in _DETR_CACHE:
+        return _DETR_CACHE[key]
+    processor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50")
+    model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+    model.to(device).eval()
+    _DETR_CACHE[key] = (processor, model)
+    return processor, model
+
+
+def _person_bbox_square_from_image(person_img: Image.Image, margin: float = 0.15):
+    """Estimate person square crop using DETR person detection with fallback."""
+    arr = np.asarray(person_img.convert("RGB"))
+    h, w = arr.shape[:2]
+    x0 = y0 = x1 = y1 = None
+
+    if _DETR_AVAILABLE:
+        try:
+            processor, model = _get_detr_detector("cpu")
+            inputs = processor(images=person_img, return_tensors="pt")
+            with torch.no_grad():
+                outputs = model(**inputs)
+            target_sizes = torch.tensor([[h, w]])
+            results = processor.post_process_object_detection(outputs, target_sizes=target_sizes, threshold=0.6)[0]
+
+            person_boxes = []
+            for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
+                lbl = int(label.item())
+                label_name = model.config.id2label.get(lbl, "").lower()
+                if label_name == "person":
+                    person_boxes.append((float(score.item()), box.tolist()))
+            if person_boxes:
+                person_boxes.sort(key=lambda t: t[0], reverse=True)
+                _, best = person_boxes[0]
+                x0, y0, x1, y1 = [int(round(v)) for v in best]
+                x0 = max(0, min(x0, w - 1))
+                y0 = max(0, min(y0, h - 1))
+                x1 = max(x0 + 1, min(x1, w))
+                y1 = max(y0 + 1, min(y1, h))
+        except Exception:
+            x0 = y0 = x1 = y1 = None
+
+    if x0 is None:
+        return _person_bbox_square_from_heuristic(person_img, margin=margin)
+
+    bw = max(1, x1 - x0 + 1)
+    bh = max(1, y1 - y0 + 1)
+    side = int(round(max(bw, bh) * (1.0 + margin)))
+    side = max(16, min(side, max(w, h)))
+
+    cx = 0.5 * (x0 + x1)
+    cy = 0.5 * (y0 + y1)
+    left = int(round(cx - side / 2))
+    top = int(round(cy - side / 2))
+
+    left = max(0, min(left, w - side))
+    top = max(0, min(top, h - side))
+    right = min(w, left + side)
+    bottom = min(h, top + side)
+    return (left, top, right, bottom)
+
+
+def _eval_triplet_person_aware_tensor(
+    person_img: Image.Image,
+    cloth_img: Image.Image,
+    tryon_img: Image.Image,
+    out_size: int,
+    pre_resize_size: int = 768,
+):
+    """Apply person-aware crop to person/tryon, and center crop to cloth."""
+    box = _person_bbox_square_from_image(person_img, margin=0.15)
+    person_c = person_img.crop(box).resize((pre_resize_size, pre_resize_size), Image.BICUBIC)
+    tryon_c = tryon_img.crop(box).resize((pre_resize_size, pre_resize_size), Image.BICUBIC)
+    cloth_c = transforms.CenterCrop(pre_resize_size)(
+        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(cloth_img)
+    )
+
+    final_tf = transforms.Compose([
+        transforms.Resize((out_size, out_size), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+    ])
+    return final_tf(person_c), final_tf(cloth_c), final_tf(tryon_c)
+
+
 class CurvtonDataset(Dataset):
     """
     CurvTon Dataset — reads images from local filesystem.
@@ -270,9 +389,10 @@ class CurvtonDataset(Dataset):
     DIFFICULTIES = ("easy", "medium", "hard")
     GENDERS      = ("female", "male")
 
-    def __init__(self, root_dir: str, difficulty="easy", gender="female", size=512):
+    def __init__(self, root_dir: str, difficulty="easy", gender="female", size=512, eval_mode=False):
         self.root_dir = root_dir
         self.size     = size
+        self.eval_mode = eval_mode
         leaf_dir = os.path.join(root_dir, difficulty, gender)
 
         cloth_dir  = os.path.join(leaf_dir, "cloth_image")
@@ -341,9 +461,17 @@ class CurvtonDataset(Dataset):
             _try_idx = idx if _attempt == 0 else random.randint(0, len(self) - 1)
             try:
                 person_path, cloth_path, tryon_path = self.triplets[_try_idx]
-                person = self.img_tf(_local_load_image(person_path))
-                cloth  = self.img_tf(_local_load_image(cloth_path))
-                vton   = self.img_tf(_local_load_image(tryon_path))
+                person_img = _local_load_image(person_path)
+                cloth_img = _local_load_image(cloth_path)
+                tryon_img = _local_load_image(tryon_path)
+                if self.eval_mode:
+                    person, cloth, vton = _eval_triplet_person_aware_tensor(
+                        person_img, cloth_img, tryon_img, out_size=self.size, pre_resize_size=768
+                    )
+                else:
+                    person = self.img_tf(person_img)
+                    cloth = self.img_tf(cloth_img)
+                    vton = self.img_tf(tryon_img)
                 return {
                     "ground_truth": vton,
                     "cloth":        cloth,
@@ -367,12 +495,13 @@ class CombinedCurvtonDataset(Dataset):
     def __init__(self, root_dir: str,
                  difficulties=("easy", "medium", "hard"),
                  genders=("female", "male"),
-                 size=512):
+                 size=512,
+                 eval_mode=False):
         self.datasets: list[CurvtonDataset] = []
         for diff in difficulties:
             for gender in genders:
                 try:
-                    ds = CurvtonDataset(root_dir, diff, gender, size)
+                    ds = CurvtonDataset(root_dir, diff, gender, size, eval_mode=eval_mode)
                     self.datasets.append(ds)
                 except Exception as e:
                     print(f"[CombinedCurvTon] Skipping {diff}/{gender}: {e}")
@@ -416,7 +545,7 @@ def get_curvton_dataloaders(root_dir: str, batch_size=8, num_workers=32,
     loaders: dict[str, DataLoader] = {}
     for diff in CurvtonDataset.DIFFICULTIES:
         ds = CombinedCurvtonDataset(root_dir, difficulties=(diff,),
-                                    genders=genders, size=size)
+                                    genders=genders, size=size, eval_mode=False)
         loaders[diff] = DataLoader(ds, batch_size=batch_size, shuffle=True,
                                    num_workers=num_workers, drop_last=True,
                                    collate_fn=collate_fn,
@@ -427,7 +556,7 @@ def get_curvton_dataloaders(root_dir: str, batch_size=8, num_workers=32,
 
     all_ds = CombinedCurvtonDataset(root_dir,
                                     difficulties=CurvtonDataset.DIFFICULTIES,
-                                    genders=genders, size=size)
+                                    genders=genders, size=size, eval_mode=False)
     loaders["all"] = DataLoader(all_ds, batch_size=batch_size, shuffle=True,
                                 num_workers=num_workers, drop_last=True,
                                 collate_fn=collate_fn,
@@ -451,7 +580,7 @@ def get_curvton_test_dataloaders(root_dir: str, batch_size=8, num_workers=32,
     loaders: dict[str, DataLoader] = {}
     for diff in CurvtonDataset.DIFFICULTIES:
         ds = CombinedCurvtonDataset(root_dir, difficulties=(diff,),
-                                    genders=genders, size=size)
+                                    genders=genders, size=size, eval_mode=False)
         loaders[diff] = DataLoader(ds, batch_size=batch_size, shuffle=False,
                                    num_workers=num_workers, drop_last=False,
                                    collate_fn=collate_fn,
@@ -462,7 +591,7 @@ def get_curvton_test_dataloaders(root_dir: str, batch_size=8, num_workers=32,
 
     all_ds = CombinedCurvtonDataset(root_dir,
                                     difficulties=CurvtonDataset.DIFFICULTIES,
-                                    genders=genders, size=size)
+                                    genders=genders, size=size, eval_mode=False)
     loaders["all"] = DataLoader(all_ds, batch_size=batch_size, shuffle=False,
                                 num_workers=num_workers, drop_last=False,
                                 collate_fn=collate_fn)
@@ -519,10 +648,11 @@ class TripletDataset(Dataset):
     )
 
     def __init__(self, root_dir: str, subset: str, size: int = 512,
-                 transform=None):
+                 transform=None, eval_mode=False):
         self.root_dir = root_dir
         self.subset   = subset
         self.size     = size
+        self.eval_mode = eval_mode
 
         cloth_dir  = os.path.join(root_dir, subset, "cloth_image")
         person_dir = os.path.join(root_dir, subset, "initial_person_image")
@@ -584,10 +714,21 @@ class TripletDataset(Dataset):
             _try_idx = idx if _attempt == 0 else random.randint(0, len(self) - 1)
             try:
                 cloth_path, person_path, tryon_path = self._items[_try_idx]
+                cloth_img = _local_load_image(cloth_path)
+                person_img = _local_load_image(person_path)
+                tryon_img = _local_load_image(tryon_path)
+                if self.eval_mode:
+                    person_t, cloth_t, tryon_t = _eval_triplet_person_aware_tensor(
+                        person_img, cloth_img, tryon_img, out_size=self.size, pre_resize_size=768
+                    )
+                else:
+                    cloth_t = self._tf(cloth_img)
+                    person_t = self._tf(person_img)
+                    tryon_t = self._tf(tryon_img)
                 return {
-                    "ground_truth": self._tf(_local_load_image(tryon_path)),
-                    "cloth":        self._tf(_local_load_image(cloth_path)),
-                    "person":       self._tf(_local_load_image(person_path)),
+                    "ground_truth": tryon_t,
+                    "cloth":        cloth_t,
+                    "person":       person_t,
                     "mask":         self._zero_mask,
                 }
             except Exception:
@@ -626,7 +767,7 @@ def get_triplet_test_dataloaders(root_dir: str, batch_size: int = 8,
         _eval_tf = _triplet_eval_transform(size)
         try:
             ds = TripletDataset(root_dir=root_dir, subset=subset, size=size,
-                                transform=_eval_tf)
+                                transform=_eval_tf, eval_mode=True)
         except (FileNotFoundError, ValueError) as exc:
             print(f"[TripletDataLoader] skipping '{subset}': {exc}")
             continue

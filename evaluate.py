@@ -29,7 +29,7 @@ def build_predict_fn(model, num_inference_steps: int, ootd: bool):
     @torch.no_grad()
     def _predict(batch, device):
         cloth = batch["cloth"].to(device)
-        person_img = batch.get("person", batch.get("masked_person")).to(device)
+        person_img = batch["person"].to(device)
         cond_input = cloth if ootd else torch.cat([person_img, cloth], dim=3)
         cond_latents = model.vae.encode(cond_input).latent_dist.sample() * 0.18215
         pred_latents = run_full_inference(model, cond_latents, num_inference_steps=num_inference_steps)

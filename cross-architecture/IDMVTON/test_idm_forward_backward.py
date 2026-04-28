@@ -180,7 +180,11 @@ def main():
     person_lat = model.encode(person)
     pose_lat = model.encode(person)
     cloth_lat = model.encode(cloth)
-    person_mask = F.interpolate(person.mean(dim=1, keepdim=True), size=target_lat.shape[-2:], mode="bilinear", align_corners=False)
+    person_mask = torch.zeros(
+        person.shape[0], 1, person.shape[2], person.shape[3],
+        device=person.device, dtype=person.dtype
+    )
+    person_mask = F.interpolate(person_mask, size=target_lat.shape[-2:], mode="bilinear", align_corners=False)
 
     noise = torch.randn_like(target_lat)
     timesteps = torch.randint(0, model.scheduler.config.num_train_timesteps, (b,), device=device).long()
