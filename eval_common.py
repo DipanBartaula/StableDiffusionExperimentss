@@ -389,9 +389,9 @@ def evaluate_all_splits(
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
     device: torch.device,
     max_batches: int = 0,
-    eval_frac_curvton: float = 0.005,
-    eval_frac_triplet: float = 0.005,
-    eval_frac_street: float = 0.005,
+    eval_frac_curvton: float = 0.04,
+    eval_frac_triplet: float = 0.04,
+    eval_frac_street: float = 0.04,
     feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()

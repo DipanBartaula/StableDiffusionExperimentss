@@ -199,11 +199,12 @@ if __name__ == "__main__":
     p.add_argument("--diffusion_steps", type=int, default=50)
     p.add_argument("--time_embed_scale", type=float, default=1000.0)
     p.add_argument("--max_batches", type=int, default=0)
-    p.add_argument("--eval_frac_curvton", type=float, default=0.005)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.005)
-    p.add_argument("--eval_frac_street", type=float, default=0.005)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.04)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.04)
+    p.add_argument("--eval_frac_street", type=float, default=0.04)
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 

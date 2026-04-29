@@ -101,6 +101,10 @@ def main(args):
         gender=args.gender,
         street_split=args.street_split,
     )
+    if args.curvton_splits:
+        allowed = {f"curvton_{s.strip().lower()}" for s in args.curvton_splits.split(",") if s.strip()}
+        loaders.curvton = {k: v for k, v in loaders.curvton.items() if k in allowed}
+        print(f"- CurvTON splits filter: {sorted(allowed)}")
     feature_cache_root = _resolve_feature_cache_root(args)
     print(f"- Feature cache dir: {feature_cache_root}")
     results = evaluate_all_splits(
@@ -142,9 +146,15 @@ if __name__ == "__main__":
                    help="Disable fp16 decode autocast.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.005)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.005)
-    p.add_argument("--eval_frac_street", type=float, default=0.005)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.04)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.04)
+    p.add_argument("--eval_frac_street", type=float, default=0.04)
+    p.add_argument(
+        "--curvton_splits",
+        type=str,
+        default=None,
+        help="Comma-separated CurvTON split names from: easy,medium,hard,overall",
+    )
     p.add_argument("--ootd", action="store_true", default=False)
     p.add_argument("--use_init_weights", action="store_true", default=False)
     p.add_argument("--device", type=str, default=None)
@@ -153,6 +163,7 @@ if __name__ == "__main__":
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 
