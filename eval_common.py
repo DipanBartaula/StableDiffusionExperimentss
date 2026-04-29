@@ -312,14 +312,19 @@ def evaluate_loader(
 
         if feature_cache_dir:
             cache_dir = Path(feature_cache_dir)
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_path = cache_dir / f"batch_{bidx:06d}.pt"
-            torch.save({
-                "pred_01": pred.detach().cpu().to(torch.float16),
-                "gt_01": gt.detach().cpu().to(torch.float16),
-                "pred_u8": pred_u8.detach().cpu(),
-                "gt_u8": gt_u8.detach().cpu(),
-            }, cache_path)
+            gen_dir = cache_dir / "generated"
+            gt_dir = cache_dir / "ground_truth"
+            gen_dir.mkdir(parents=True, exist_ok=True)
+            gt_dir.mkdir(parents=True, exist_ok=True)
+
+            pred_cpu = pred_u8.detach().cpu()
+            gt_cpu = gt_u8.detach().cpu()
+            for i in range(bs):
+                sample_idx = n_img - bs + i
+                pred_img = pred_cpu[i].permute(1, 2, 0).numpy()
+                gt_img = gt_cpu[i].permute(1, 2, 0).numpy()
+                Image.fromarray(pred_img).save(gen_dir / f"{sample_idx:08d}.png")
+                Image.fromarray(gt_img).save(gt_dir / f"{sample_idx:08d}.png")
 
     out = {"n_images": int(n_img)}
     if paired_metrics and n_img > 0:
