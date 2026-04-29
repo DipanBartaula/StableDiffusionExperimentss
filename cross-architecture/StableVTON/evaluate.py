@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import json
 import os
 import sys
@@ -18,7 +18,7 @@ try:
 except Exception:
     CURVTON_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
     TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1_1"
-    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/street_tryon"
+    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/benchmark_datasets/street_tryon"
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_stable_vton_local import StableVTONModel, stableviton_preprocess  # noqa: E402
 
@@ -103,3 +103,4 @@ if __name__ == "__main__":
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
