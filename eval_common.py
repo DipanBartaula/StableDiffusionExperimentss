@@ -364,6 +364,14 @@ def summarize_group(title: str, results: Dict[str, dict]):
         print(f"FID(unpaired)={m.get('fid_unpaired', float('nan')):.4f}  KID(unpaired)={m.get('kid_unpaired_mean', float('nan')):.6f}")
 
 
+def summarize_single(split: str, m: dict):
+    print(f"\n[{split}] completed. n={m.get('n_images', 0)}")
+    if "lpips" in m:
+        print(f"LPIPS={m['lpips']:.4f}  SSIM={m['ssim']:.4f}  PSNR={m['psnr']:.2f}")
+        print(f"FID(paired)={m.get('fid_paired', float('nan')):.4f}  KID(paired)={m.get('kid_paired_mean', float('nan')):.6f}")
+    print(f"FID(unpaired)={m.get('fid_unpaired', float('nan')):.4f}  KID(unpaired)={m.get('kid_unpaired_mean', float('nan')):.6f}")
+
+
 def evaluate_all_splits(
     loaders: EvalLoaders,
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
@@ -391,6 +399,7 @@ def evaluate_all_splits(
             apply_vae_gt_roundtrip=True,
             feature_cache_dir=(str(Path(feature_cache_root) / "curvton" / name) if feature_cache_root else None),
         )
+        summarize_single(name, curvton_results[name])
 
     for name, loader in loaders.triplet.items():
         triplet_results[name] = evaluate_loader(
@@ -405,6 +414,7 @@ def evaluate_all_splits(
             apply_vae_gt_roundtrip=False,
             feature_cache_dir=(str(Path(feature_cache_root) / "triplet" / name) if feature_cache_root else None),
         )
+        summarize_single(name, triplet_results[name])
 
     for name, loader in loaders.street.items():
         street_results[name] = evaluate_loader(
@@ -419,6 +429,7 @@ def evaluate_all_splits(
             apply_vae_gt_roundtrip=False,
             feature_cache_dir=(str(Path(feature_cache_root) / "street_tryon" / name) if feature_cache_root else None),
         )
+        summarize_single(name, street_results[name])
 
     summarize_group("CURVTON SPLITS + OVERALL", curvton_results)
     summarize_group("TRIPLET (DRESSCODE + VITONHD + OVERALL)", triplet_results)
