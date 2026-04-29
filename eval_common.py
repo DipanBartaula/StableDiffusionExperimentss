@@ -326,8 +326,10 @@ def evaluate_loader(
             cache_dir = Path(feature_cache_dir)
             gen_dir = cache_dir / "generated"
             gt_dir = cache_dir / "ground_truth"
+            diff_dir = cache_dir / "diff_abs"
             gen_dir.mkdir(parents=True, exist_ok=True)
             gt_dir.mkdir(parents=True, exist_ok=True)
+            diff_dir.mkdir(parents=True, exist_ok=True)
 
             pred_cpu = pred_u8.detach().cpu()
             gt_cpu = gt_u8.detach().cpu()
@@ -335,8 +337,10 @@ def evaluate_loader(
                 sample_idx = n_img - bs + i
                 pred_img = pred_cpu[i].permute(1, 2, 0).numpy()
                 gt_img = gt_cpu[i].permute(1, 2, 0).numpy()
+                diff_img = np.abs(pred_img.astype(np.int16) - gt_img.astype(np.int16)).astype(np.uint8)
                 Image.fromarray(pred_img).save(gen_dir / f"{sample_idx:08d}.png")
                 Image.fromarray(gt_img).save(gt_dir / f"{sample_idx:08d}.png")
+                Image.fromarray(diff_img).save(diff_dir / f"{sample_idx:08d}.png")
 
     out = {"n_images": int(n_img)}
     if paired_metrics and n_img > 0:
@@ -389,9 +393,9 @@ def evaluate_all_splits(
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
     device: torch.device,
     max_batches: int = 0,
-    eval_frac_curvton: float = 0.04,
-    eval_frac_triplet: float = 0.04,
-    eval_frac_street: float = 0.04,
+    eval_frac_curvton: float = 0.25,
+    eval_frac_triplet: float = 0.25,
+    eval_frac_street: float = 0.25,
     feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()

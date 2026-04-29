@@ -58,7 +58,9 @@ def _resolve_feature_cache_root(args):
     root = args.feature_cache_root
     if args.feature_cache_dir:
         return args.feature_cache_dir
-    if args.checkpoint:
+    if args.use_init_weights:
+        run_name = getattr(args, "run_name", None) or "init_weights"
+    elif args.checkpoint:
         ckpt = Path(args.checkpoint)
         run_name = ckpt.parent.parent.name if ckpt.parent.name == "checkpoints" else ckpt.parent.name
     else:
@@ -79,7 +81,9 @@ def main(args):
     device = _resolve_device(args)
     model = SDModel().to(device)
     model.unet.eval()
-    if args.checkpoint:
+    if args.use_init_weights:
+        print("Using initial CATVTON weights (no checkpoint load).")
+    elif args.checkpoint:
         step = _load_unet_checkpoint(model.unet, args.checkpoint, device)
         if step is None:
             print(f"Loaded checkpoint: {args.checkpoint}")
@@ -146,9 +150,9 @@ if __name__ == "__main__":
                    help="Disable fp16 decode autocast.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.04)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.04)
-    p.add_argument("--eval_frac_street", type=float, default=0.04)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.25)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.25)
+    p.add_argument("--eval_frac_street", type=float, default=0.25)
     p.add_argument(
         "--curvton_splits",
         type=str,
@@ -163,6 +167,7 @@ if __name__ == "__main__":
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 

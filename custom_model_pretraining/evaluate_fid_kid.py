@@ -92,6 +92,20 @@ def _build_predict_fn(args, model):
 
 def main(args: argparse.Namespace) -> None:
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    if args.approach == "datapred":
+        model = _build_datapred_model(args).to(device).eval()
+    else:
+        model = _build_meanflow_model(args).to(device).eval()
+
+    if args.use_init_weights:
+        print("Using initial custom DiT weights (no checkpoint load).")
+    elif args.checkpoint:
+        ckpt = torch.load(args.checkpoint, map_location=device)
+        model.load_state_dict(ckpt["model"], strict=False)
+        print(f"Loaded checkpoint: {args.checkpoint}")
+    else:
+        print("Using init weights for evaluation.")
+
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
         triplet_test_data_path=args.triplet_test_data_path,
@@ -115,18 +129,6 @@ def main(args: argparse.Namespace) -> None:
     )
 
     merged = _build_merged_loader(loaders, args.batch_size, args.num_workers)
-
-    if args.approach == "datapred":
-        model = _build_datapred_model(args).to(device).eval()
-    else:
-        model = _build_meanflow_model(args).to(device).eval()
-
-    if args.checkpoint:
-        ckpt = torch.load(args.checkpoint, map_location=device)
-        model.load_state_dict(ckpt["model"], strict=False)
-        print(f"Loaded checkpoint: {args.checkpoint}")
-    else:
-        print("Using init weights for evaluation.")
 
     est_n = len(merged.dataset)
     kid_subset = max(2, min(50, int(est_n)))
@@ -199,12 +201,14 @@ if __name__ == "__main__":
     p.add_argument("--diffusion_steps", type=int, default=50)
     p.add_argument("--time_embed_scale", type=float, default=1000.0)
     p.add_argument("--max_batches", type=int, default=0)
-    p.add_argument("--eval_frac_curvton", type=float, default=0.04)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.04)
-    p.add_argument("--eval_frac_street", type=float, default=0.04)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.25)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.25)
+    p.add_argument("--eval_frac_street", type=float, default=0.25)
     p.add_argument("--device", type=str, default=None)
+    p.add_argument("--use_init_weights", action="store_true", default=False)
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 
