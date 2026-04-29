@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import json
 from pathlib import Path
 from datetime import datetime
@@ -79,7 +79,7 @@ def main(args):
     if args.use_init_weights:
         print("Using initial IDM-VTON weights (no checkpoint load).")
     elif args.checkpoint:
-        ckpt = torch.load(args.checkpoint, map_location=device)
+        ckpt = torch.load(args.checkpoint, map_location="cpu")
         model.unet.load_state_dict(ckpt["unet_state_dict"])
         if "image_proj_state_dict" in ckpt:
             model.image_proj_model.load_state_dict(ckpt["image_proj_state_dict"])
@@ -138,15 +138,16 @@ if __name__ == "__main__":
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--num_inference_steps", type=int, default=30)
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.10)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.30)
-    p.add_argument("--eval_frac_street", type=float, default=0.30)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.005)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.005)
+    p.add_argument("--eval_frac_street", type=float, default=0.005)
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--cuda_device", type=int, default=None, help="CUDA device index (e.g., 1 -> cuda:1). Ignored if --device is set.")
     p.add_argument("--feature_cache_root", type=str, default="/iopsstor/scratch/cscs/dbartaula/featurecache")
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 

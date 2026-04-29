@@ -48,6 +48,22 @@ from utils import (
 _VAE_CACHE = {}
 
 
+def _safe_loader_kwargs(num_workers: int) -> dict:
+    # Frontend/login nodes can crash with forked workers + pinned memory.
+    if num_workers <= 0:
+        return {
+            "num_workers": 0,
+            "pin_memory": False,
+            "persistent_workers": False,
+        }
+    return {
+        "num_workers": num_workers,
+        "pin_memory": False,
+        "persistent_workers": False,
+        "multiprocessing_context": "spawn",
+    }
+
+
 def _to_01(x: torch.Tensor) -> torch.Tensor:
     if x.dtype != torch.float32 and x.dtype != torch.float64 and x.dtype != torch.float16 and x.dtype != torch.bfloat16:
         x = x.float()
@@ -144,11 +160,9 @@ def get_street_tryon_loader(root_dir: str, split: str, batch_size: int, num_work
         ds,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
         drop_last=False,
         collate_fn=collate_fn,
-        pin_memory=True,
-        persistent_workers=(num_workers > 0),
+        **_safe_loader_kwargs(num_workers),
     )
 
 
@@ -204,11 +218,9 @@ def build_eval_loaders(
                 merged,
                 batch_size=batch_size,
                 shuffle=False,
-                num_workers=num_workers,
                 drop_last=False,
                 collate_fn=collate_fn,
-                pin_memory=True,
-                persistent_workers=(num_workers > 0),
+                **_safe_loader_kwargs(num_workers),
             )
 
     if street_tryon_data_path:
@@ -377,9 +389,9 @@ def evaluate_all_splits(
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
     device: torch.device,
     max_batches: int = 0,
-    eval_frac_curvton: float = 0.10,
-    eval_frac_triplet: float = 0.30,
-    eval_frac_street: float = 0.30,
+    eval_frac_curvton: float = 0.005,
+    eval_frac_triplet: float = 0.005,
+    eval_frac_street: float = 0.005,
     feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()

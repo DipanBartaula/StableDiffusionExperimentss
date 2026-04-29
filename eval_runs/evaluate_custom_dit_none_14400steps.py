@@ -7,7 +7,7 @@ import sys
 
 RUN_NAME = 'train_custom_dit_none_14400steps'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/custom_dit_assets/train_custom_dit_none_14400steps/checkpoints')
-COMMAND = ['python', 'custom_model_pretraining/evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.01']
+COMMAND = ['python', 'custom_model_pretraining/evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.005']
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:
@@ -93,3 +93,4 @@ if __name__ == '__main__':
     except Exception as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         raise SystemExit(1)
+

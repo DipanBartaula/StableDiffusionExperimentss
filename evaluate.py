@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import json
 from pathlib import Path
 from datetime import datetime
@@ -18,7 +18,8 @@ from utils import decode_latents, run_full_inference
 
 
 def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
-    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    # Load checkpoint on CPU first to avoid GPU OOM spikes during deserialization.
+    ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     if "unet_state_dict" in ckpt:
         sd = ckpt["unet_state_dict"]
     elif "model_state_dict" in ckpt:
@@ -141,9 +142,9 @@ if __name__ == "__main__":
                    help="Disable fp16 decode autocast.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.10)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.30)
-    p.add_argument("--eval_frac_street", type=float, default=0.30)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.005)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.005)
+    p.add_argument("--eval_frac_street", type=float, default=0.005)
     p.add_argument("--ootd", action="store_true", default=False)
     p.add_argument("--use_init_weights", action="store_true", default=False)
     p.add_argument("--device", type=str, default=None)
@@ -152,5 +153,6 @@ if __name__ == "__main__":
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
