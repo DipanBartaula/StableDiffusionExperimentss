@@ -104,6 +104,8 @@ def train(args):
             except Exception as _we:
                 print(f"[WARN] W&B init failed, disabling logging: {_we}")
         print(f"Device: {device}  |  rank={rank}/{world_size}")
+        if args.use_dream:
+            print(f"[DREAM] Enabled with lambda={args.dream_lambda}")
 
     def _wandb_log(payload, step=None):
         if is_main and wandb_enabled:
@@ -616,6 +618,20 @@ def train(args):
 
                 text_emb = _cached_text_emb[:B]
 
+                # Optional DREAM-style target rectification (CatVTON-style).
+                if args.use_dream:
+                    if model.scheduler.config.prediction_type != "epsilon":
+                        raise ValueError("DREAM is only implemented for epsilon prediction_type.")
+                    with torch.no_grad(), autocast():
+                        noise_pred_sg = model.unet(unet_input, timesteps, text_emb).sample
+                    delta_noise = (noise - noise_pred_sg).detach() * args.dream_lambda
+                    alpha_bar_t = model.scheduler.alphas_cumprod.to(
+                        device=timesteps.device, dtype=noisy_latents.dtype
+                    )[timesteps].view(-1, 1, 1, 1)
+                    noisy_latents = noisy_latents + (1.0 - alpha_bar_t).sqrt() * delta_noise
+                    noise = noise + delta_noise
+                    unet_input = torch.cat([noisy_latents, cond_latents], dim=1)
+
                 # Forward
                 optimizer.zero_grad(set_to_none=True)
                 with autocast():
@@ -871,6 +887,10 @@ if __name__ == "__main__":
     parser.add_argument("--skip_eval", action="store_true", default=False,
                         help="Skip all evaluation during training (periodic and end-of-training). "
                              "Use evaluate.py separately to evaluate checkpoints.")
+    parser.add_argument("--use_dream", action="store_true", default=False,
+                        help="Enable DREAM-style target rectification during training.")
+    parser.add_argument("--dream_lambda", type=float, default=10.0,
+                        help="DREAM lambda strength (CatVTON paper ablation reports best around 10).")
 
     args = parser.parse_args()
 
