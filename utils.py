@@ -882,9 +882,25 @@ def get_triplet_train_loader(root_dir: str, batch_size: int = 16,
 # ============================================================
 # TRAINING UTILITIES
 # ============================================================
-def decode_latents(vae, latents):
+def decode_latents(vae, latents, decode_batch_size=1, vae_fp16=True):
     with torch.no_grad():
-        imgs = vae.decode(latents / 0.18215).sample
+        chunks = []
+        b = latents.shape[0]
+        step = max(1, int(decode_batch_size))
+        use_amp = (
+            vae_fp16
+            and latents.device.type == "cuda"
+            and latents.dtype in (torch.float16, torch.float32, torch.bfloat16)
+        )
+        for i in range(0, b, step):
+            z = latents[i : i + step]
+            if use_amp:
+                with torch.cuda.amp.autocast(dtype=torch.float16):
+                    out = vae.decode(z / 0.18215).sample
+            else:
+                out = vae.decode(z / 0.18215).sample
+            chunks.append(out)
+        imgs = torch.cat(chunks, dim=0)
         imgs = (imgs / 2 + 0.5).clamp(0, 1)
     return imgs
 

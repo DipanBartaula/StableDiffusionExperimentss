@@ -32,7 +32,7 @@ def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
     return ckpt.get("step", None)
 
 
-def build_predict_fn(model, num_inference_steps: int, ootd: bool):
+def build_predict_fn(model, num_inference_steps: int, ootd: bool, decode_batch_size: int, vae_fp16_decode: bool):
     @torch.no_grad()
     def _predict(batch, device):
         cloth = batch["cloth"].to(device)
@@ -40,7 +40,12 @@ def build_predict_fn(model, num_inference_steps: int, ootd: bool):
         cond_input = cloth if ootd else torch.cat([person_img, cloth], dim=3)
         cond_latents = model.vae.encode(cond_input).latent_dist.sample() * 0.18215
         pred_latents = run_full_inference(model, cond_latents, num_inference_steps=num_inference_steps)
-        pred_wide = decode_latents(model.vae, pred_latents)
+        pred_wide = decode_latents(
+            model.vae,
+            pred_latents,
+            decode_batch_size=decode_batch_size,
+            vae_fp16=vae_fp16_decode,
+        )
         if ootd:
             return pred_wide * 2 - 1
         return pred_wide[:, :, :, : cloth.shape[-1]] * 2 - 1
@@ -99,7 +104,13 @@ def main(args):
     print(f"- Feature cache dir: {feature_cache_root}")
     results = evaluate_all_splits(
         loaders=loaders,
-        predict_fn=build_predict_fn(model, args.num_inference_steps, args.ootd),
+        predict_fn=build_predict_fn(
+            model,
+            args.num_inference_steps,
+            args.ootd,
+            args.decode_batch_size,
+            args.vae_fp16_decode,
+        ),
         device=device,
         max_batches=args.max_batches,
         eval_frac_curvton=args.eval_frac_curvton,
@@ -124,6 +135,10 @@ if __name__ == "__main__":
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--num_inference_steps", type=int, default=30)
+    p.add_argument("--decode_batch_size", type=int, default=1, help="Chunk size for VAE decode to reduce VRAM.")
+    p.add_argument("--vae_fp16_decode", action="store_true", default=True, help="Use fp16 autocast during VAE decode.")
+    p.add_argument("--no_vae_fp16_decode", action="store_false", dest="vae_fp16_decode",
+                   help="Disable fp16 decode autocast.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
     p.add_argument("--eval_frac_curvton", type=float, default=0.10)
