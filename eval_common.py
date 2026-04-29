@@ -222,6 +222,7 @@ def evaluate_loader(
     loader: DataLoader,
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
     device: torch.device,
+    progress_name: str = "eval",
     max_batches: int = 0,
     eval_frac: float = 1.0,
     paired_metrics: bool = True,
@@ -250,12 +251,18 @@ def evaluate_loader(
     if eval_frac > 0 and eval_frac < 1.0:
         frac_batches = max(1, int(math.ceil(total_batches * eval_frac)))
     effective_batches = frac_batches if max_batches <= 0 else min(frac_batches, max_batches)
+    print(
+        f"[{progress_name}] starting: total_batches={total_batches}, "
+        f"effective_batches={effective_batches}, eval_frac={eval_frac}"
+    )
 
     for bidx, batch in enumerate(loader):
         if bidx >= effective_batches:
             break
         if batch is None:
             continue
+        if bidx == 0 or (bidx + 1) % 10 == 0 or (bidx + 1) == effective_batches:
+            print(f"[{progress_name}] progress: {bidx + 1}/{effective_batches} batches")
 
         with torch.no_grad():
             pred = predict_fn(batch, device)
@@ -353,6 +360,7 @@ def evaluate_all_splits(
             loader=loader,
             predict_fn=predict_fn,
             device=device,
+            progress_name=name,
             max_batches=max_batches,
             eval_frac=eval_frac_curvton,
             paired_metrics=True,
@@ -365,6 +373,7 @@ def evaluate_all_splits(
             loader=loader,
             predict_fn=predict_fn,
             device=device,
+            progress_name=name,
             max_batches=max_batches,
             eval_frac=eval_frac_triplet,
             paired_metrics=True,
@@ -377,6 +386,7 @@ def evaluate_all_splits(
             loader=loader,
             predict_fn=predict_fn,
             device=device,
+            progress_name=name,
             max_batches=max_batches,
             eval_frac=eval_frac_street,
             paired_metrics=False,
