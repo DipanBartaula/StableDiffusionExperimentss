@@ -51,6 +51,7 @@ def build_predict_fn(model, diffusion_steps: int, sqrt_ab: torch.Tensor, sqrt_1m
 
 def main(args):
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    weight_source = "init_xavier"
     if args.use_init_weights:
         cfg = DiTConfig()
         ckpt = None
@@ -58,6 +59,7 @@ def main(args):
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location=device)
         cfg = _load_cfg(ckpt.get("cfg", {}))
+        weight_source = f"checkpoint={args.checkpoint}"
     else:
         cfg = DiTConfig()
         ckpt = None
@@ -68,6 +70,7 @@ def main(args):
         print(f"Loaded custom DiT checkpoint: {args.checkpoint}")
     else:
         print("Using initial custom DiT weights (no checkpoint load).")
+    print(f"Weights used: {weight_source}")
 
     betas = make_beta_schedule(args.diffusion_steps).to(device)
     alphas = 1.0 - betas

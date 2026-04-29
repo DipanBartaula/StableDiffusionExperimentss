@@ -76,6 +76,7 @@ def main(args):
     device = _resolve_device(args)
     model = IDMVTONModel(args).to(device).eval()
 
+    weight_source = "init_xavier"
     if args.use_init_weights:
         print("Using initial IDM-VTON weights (no checkpoint load).")
     elif args.checkpoint:
@@ -83,9 +84,11 @@ def main(args):
         model.unet.load_state_dict(ckpt["unet_state_dict"])
         if "image_proj_state_dict" in ckpt:
             model.image_proj_model.load_state_dict(ckpt["image_proj_state_dict"])
+        weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
         print("Using initial IDM-VTON weights (no checkpoint load).")
+    print(f"Weights used: {weight_source}")
     print("\nDatasets for evaluation:")
     print(f"- CurvTON test: {args.curvton_test_data_path}")
     print(f"- Triplet test: {args.triplet_test_data_path}")

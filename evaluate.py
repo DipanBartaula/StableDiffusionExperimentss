@@ -81,16 +81,19 @@ def main(args):
     device = _resolve_device(args)
     model = SDModel().to(device)
     model.unet.eval()
+    weight_source = "init_xavier"
     if args.use_init_weights:
         print("Using initial CATVTON weights (no checkpoint load).")
     elif args.checkpoint:
         step = _load_unet_checkpoint(model.unet, args.checkpoint, device)
+        weight_source = f"checkpoint={args.checkpoint}"
         if step is None:
             print(f"Loaded checkpoint: {args.checkpoint}")
         else:
             print(f"Loaded checkpoint: {args.checkpoint} (step={step})")
     else:
         print("Using initial CATVTON weights (no checkpoint load).")
+    print(f"Weights used: {weight_source}")
     print("\nDatasets for evaluation:")
     print(f"- CurvTON test: {args.curvton_test_data_path}")
     print(f"- Triplet test: {args.triplet_test_data_path}")
@@ -105,10 +108,15 @@ def main(args):
         gender=args.gender,
         street_split=args.street_split,
     )
+    print(f"- CurvTON splits discovered: {sorted(loaders.curvton.keys())}")
     if args.curvton_splits:
         allowed = {f"curvton_{s.strip().lower()}" for s in args.curvton_splits.split(",") if s.strip()}
+        missing = sorted(k for k in allowed if k not in loaders.curvton)
         loaders.curvton = {k: v for k, v in loaders.curvton.items() if k in allowed}
         print(f"- CurvTON splits filter: {sorted(allowed)}")
+        if missing:
+            print(f"- WARNING: requested CurvTON splits not found in dataset: {missing}")
+        print(f"- CurvTON splits to evaluate: {sorted(loaders.curvton.keys())}")
     feature_cache_root = _resolve_feature_cache_root(args)
     print(f"- Feature cache dir: {feature_cache_root}")
     results = evaluate_all_splits(

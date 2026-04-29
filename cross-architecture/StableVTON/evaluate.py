@@ -71,14 +71,17 @@ def main(args):
     device = _resolve_device(args)
     model = StableVTONModel(args.model_name).to(device).eval()
 
+    weight_source = "init_xavier"
     if args.use_init_weights:
         print("Using initial StableVTON weights (no checkpoint load).")
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location="cpu")
         model.unet.load_state_dict(ckpt["model_state_dict"], strict=False)
+        weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
         print("Using initial StableVTON weights (no checkpoint load).")
+    print(f"Weights used: {weight_source}")
     print("\nDatasets for evaluation:")
     print(f"- CurvTON test: {args.curvton_test_data_path}")
     print(f"- Triplet test: {args.triplet_test_data_path}")

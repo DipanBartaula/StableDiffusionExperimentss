@@ -67,6 +67,7 @@ def main(args):
     device = _resolve_device(args)
     model = OOTDiffusionModel(args.model_name, outfitting_dropout=0.0).to(device).eval()
 
+    weight_source = "init_xavier"
     if args.use_init_weights:
         print("Using initial OOTDiffusion weights (no checkpoint load).")
     elif args.checkpoint:
@@ -74,9 +75,11 @@ def main(args):
         model.denoising_unet.load_state_dict(ckpt["denoising_unet_state_dict"])
         model.outfitting_unet.load_state_dict(ckpt["outfitting_unet_state_dict"])
         model.outfit_adapter.load_state_dict(ckpt["outfit_adapter_state_dict"])
+        weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
         print("Using initial OOTDiffusion weights (no checkpoint load).")
+    print(f"Weights used: {weight_source}")
     print("\nDatasets for evaluation:")
     print(f"- CurvTON test: {args.curvton_test_data_path}")
     print(f"- Triplet test: {args.triplet_test_data_path}")

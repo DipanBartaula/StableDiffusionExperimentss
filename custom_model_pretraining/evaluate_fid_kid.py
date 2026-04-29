@@ -92,6 +92,7 @@ def _build_predict_fn(args, model):
 
 def main(args: argparse.Namespace) -> None:
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    weight_source = "init_xavier"
     if args.approach == "datapred":
         model = _build_datapred_model(args).to(device).eval()
     else:
@@ -102,9 +103,11 @@ def main(args: argparse.Namespace) -> None:
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location=device)
         model.load_state_dict(ckpt["model"], strict=False)
+        weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
         print("Using init weights for evaluation.")
+    print(f"Weights used: {weight_source}")
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
