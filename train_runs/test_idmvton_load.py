@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--image_encoder_path", type=str, default="ckpt/image_encoder")
     parser.add_argument("--num_tokens", type=int, default=16)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--batch_size", type=int, default=1)
     args = parser.parse_args()
 
     _setup_paths()
@@ -43,7 +44,7 @@ def main():
     model = IDMVTONModel(ns).to(args.device)
     model.train()
 
-    b = 1
+    b = args.batch_size
     h = 64
     w = 64
     noisy = torch.randn(b, 4, h, w, device=args.device)

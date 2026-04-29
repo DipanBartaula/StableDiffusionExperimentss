@@ -19,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke-test OOTDiffusion model loading")
     parser.add_argument("--model_name", type=str, default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--batch_size", type=int, default=1)
     args = parser.parse_args()
 
     _setup_paths()
@@ -29,7 +30,7 @@ def main():
     model = OOTDiffusionModel(args.model_name).to(args.device)
     model.train()
 
-    b = 1
+    b = args.batch_size
     h = 64
     w = 64
     noisy = torch.randn(b, 4, h, w, device=args.device)
