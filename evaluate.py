@@ -1,5 +1,6 @@
 ﻿import argparse
 import json
+from pathlib import Path
 from datetime import datetime
 import os
 
@@ -60,8 +61,16 @@ def _resolve_feature_cache_root(args):
     return str(Path(root) / run_name / f"eval_{stamp}")
 
 
+def _resolve_device(args):
+    if args.device:
+        return torch.device(args.device)
+    if args.cuda_device is not None and torch.cuda.is_available():
+        return torch.device(f"cuda:{args.cuda_device}")
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def main(args):
-    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    device = _resolve_device(args)
     model = SDModel().to(device)
     model.unet.eval()
     if args.checkpoint:
@@ -123,6 +132,7 @@ if __name__ == "__main__":
     p.add_argument("--ootd", action="store_true", default=False)
     p.add_argument("--use_init_weights", action="store_true", default=False)
     p.add_argument("--device", type=str, default=None)
+    p.add_argument("--cuda_device", type=int, default=None, help="CUDA device index (e.g., 1 -> cuda:1). Ignored if --device is set.")
     p.add_argument("--feature_cache_root", type=str, default="/iopsstor/scratch/cscs/dbartaula/featurecache")
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)

@@ -77,6 +77,11 @@ def main() -> int:
         print('Evaluating with initial (Xavier/init) weights.')
     print('Command:', ' '.join(cmd))
 
+    extra_args = sys.argv[1:]
+    if extra_args:
+        print('Forwarding extra CLI args:', ' '.join(extra_args))
+        cmd = cmd + extra_args
+
     result = subprocess.run(cmd)
     if result.returncode == 0:
         _print_output_json_if_available(cmd)

@@ -4,7 +4,8 @@ import json
 import re
 import subprocess
 import sys
-RUN_NAME = 'Stable_diffusion_train_custom_dit_meanflow_250m_30000steps'
+
+RUN_NAME = 'Stable_diffusion_train_custom_dit_meanflow_250m_30000steps'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_meanflow_250m_30000steps/checkpoints')
 COMMAND = ['python', 'custom_model_pretraining/evaluate_fid_kid.py', '--approach', 'meanflow', '--model_size', '250m', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--image_size', '64', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.01', '--output_json', '/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_meanflow_250m_30000steps/eval_fid_kid.json']
 
@@ -74,6 +75,11 @@ def main() -> int:
         print(f'No checkpoint available in: {CKPT_DIR}')
         print('Evaluating with initial (Xavier/init) weights.')
     print('Command:', ' '.join(cmd))
+
+    extra_args = sys.argv[1:]
+    if extra_args:
+        print('Forwarding extra CLI args:', ' '.join(extra_args))
+        cmd = cmd + extra_args
 
     result = subprocess.run(cmd)
     if result.returncode == 0:
