@@ -47,7 +47,7 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke-test IDM-VTON model loading")
     parser.add_argument("--pretrained_model_name_or_path", type=str, default="diffusers/stable-diffusion-xl-1.0-inpainting-0.1")
     parser.add_argument("--pretrained_garmentnet_path", type=str, default="stabilityai/stable-diffusion-xl-base-1.0")
-    parser.add_argument("--image_encoder_path", type=str, default="ckpt/image_encoder")
+    parser.add_argument("--image_encoder_path", type=str, default="openai/clip-vit-large-patch14")
     parser.add_argument("--num_tokens", type=int, default=16)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--batch_size", type=int, default=None,
@@ -59,6 +59,12 @@ def main():
     _setup_paths()
     use_dist, rank, world_size, local_rank, device = _init_dist(args.device)
     from IDMVTON.train_idm_vton_local import IDMVTONModel  # noqa: E402
+
+    # Helpful preflight for common cluster path mismatch.
+    if ("/" in args.image_encoder_path or "\\" in args.image_encoder_path) and not os.path.exists(args.image_encoder_path):
+        if rank == 0:
+            print(f"[WARN] image_encoder_path does not exist locally: {args.image_encoder_path}")
+            print("[WARN] Falling back is not automatic for this arg. Pass a valid local path or HF model id.")
 
     ns = SimpleNamespace(
         pretrained_model_name_or_path=args.pretrained_model_name_or_path,
