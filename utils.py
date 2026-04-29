@@ -65,7 +65,10 @@ try:
 except ImportError:
     raise ImportError("Install torchmetrics with image extras: pip install torchmetrics[image]")
 
-from config import IMAGE_SIZE
+try:
+    from config import IMAGE_SIZE
+except Exception:
+    IMAGE_SIZE = 512
 
 
 # ============================================================

@@ -27,7 +27,11 @@ try:
 except ImportError as exc:
     raise ImportError("Install torchmetrics with image extras: pip install torchmetrics[image]") from exc
 
-from config import IMAGE_SIZE, MODEL_NAME
+try:
+    from config import IMAGE_SIZE, MODEL_NAME
+except Exception:
+    IMAGE_SIZE = 512
+    MODEL_NAME = "runwayml/stable-diffusion-v1-5"
 from utils import (
     collate_fn,
     get_curvton_test_dataloaders,

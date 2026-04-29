@@ -6,7 +6,10 @@ import torch
 import torch.nn as nn
 from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 
-from config import MODEL_NAME
+try:
+    from config import MODEL_NAME
+except Exception:
+    MODEL_NAME = "runwayml/stable-diffusion-v1-5"
 
 
 # ============================================================
