@@ -6,7 +6,7 @@ import subprocess
 import sys
 RUN_NAME = 'train_custom_dit_reverse_3600steps'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/custom_dit_assets/train_custom_dit_reverse_3600steps/checkpoints')
-COMMAND = ['python', 'custom_model_pretraining/evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.12']
+COMMAND = ['python', 'custom_model_pretraining/evaluate.py', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.01']
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:

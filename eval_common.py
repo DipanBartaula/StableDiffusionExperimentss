@@ -1,5 +1,7 @@
 ﻿import math
 import os
+from pathlib import Path
+import logging
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
@@ -11,6 +13,9 @@ from PIL import Image
 from diffusers import AutoencoderKL
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import transforms
+
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
 
 try:
     import lpips as lpips_lib
@@ -228,6 +233,7 @@ def evaluate_loader(
     paired_metrics: bool = True,
     unpaired_metrics: bool = True,
     apply_vae_gt_roundtrip: bool = False,
+    feature_cache_dir: Optional[str] = None,
 ):
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device) if paired_metrics else None
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device) if paired_metrics else None
@@ -304,6 +310,17 @@ def evaluate_loader(
             kid_u.update(gt_shuf, real=True)
             kid_u.update(pred_u8, real=False)
 
+        if feature_cache_dir:
+            cache_dir = Path(feature_cache_dir)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_path = cache_dir / f"batch_{bidx:06d}.pt"
+            torch.save({
+                "pred_01": pred.detach().cpu().to(torch.float16),
+                "gt_01": gt.detach().cpu().to(torch.float16),
+                "pred_u8": pred_u8.detach().cpu(),
+                "gt_u8": gt_u8.detach().cpu(),
+            }, cache_path)
+
     out = {"n_images": int(n_img)}
     if paired_metrics and n_img > 0:
         out["lpips"] = lpips_sum / n_img
@@ -350,6 +367,7 @@ def evaluate_all_splits(
     eval_frac_curvton: float = 0.10,
     eval_frac_triplet: float = 0.30,
     eval_frac_street: float = 0.30,
+    feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()
     triplet_results: Dict[str, dict] = OrderedDict()
@@ -366,6 +384,7 @@ def evaluate_all_splits(
             paired_metrics=True,
             unpaired_metrics=True,
             apply_vae_gt_roundtrip=True,
+            feature_cache_dir=(str(Path(feature_cache_root) / "curvton" / name) if feature_cache_root else None),
         )
 
     for name, loader in loaders.triplet.items():
@@ -379,6 +398,7 @@ def evaluate_all_splits(
             paired_metrics=True,
             unpaired_metrics=True,
             apply_vae_gt_roundtrip=False,
+            feature_cache_dir=(str(Path(feature_cache_root) / "triplet" / name) if feature_cache_root else None),
         )
 
     for name, loader in loaders.street.items():
@@ -392,6 +412,7 @@ def evaluate_all_splits(
             paired_metrics=False,
             unpaired_metrics=True,
             apply_vae_gt_roundtrip=False,
+            feature_cache_dir=(str(Path(feature_cache_root) / "street_tryon" / name) if feature_cache_root else None),
         )
 
     summarize_group("CURVTON SPLITS + OVERALL", curvton_results)

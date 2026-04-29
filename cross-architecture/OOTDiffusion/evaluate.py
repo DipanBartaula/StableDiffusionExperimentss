@@ -1,5 +1,6 @@
 ﻿import argparse
 import json
+from datetime import datetime
 import os
 import sys
 
@@ -40,6 +41,19 @@ def build_predict_fn(model, num_inference_steps: int):
     return _predict
 
 
+def _resolve_feature_cache_root(args):
+    root = args.feature_cache_root
+    if args.feature_cache_dir:
+        return args.feature_cache_dir
+    if args.checkpoint:
+        ckpt = Path(args.checkpoint)
+        run_name = ckpt.parent.parent.name if ckpt.parent.name == "checkpoints" else ckpt.parent.name
+    else:
+        run_name = getattr(args, "run_name", None) or "init_weights"
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return str(Path(root) / run_name / f"eval_{stamp}")
+
+
 def main(args):
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     model = OOTDiffusionModel(args.model_name, outfitting_dropout=0.0).to(device).eval()
@@ -67,6 +81,8 @@ def main(args):
         gender=args.gender,
         street_split=args.street_split,
     )
+    feature_cache_root = _resolve_feature_cache_root(args)
+    print(f"- Feature cache dir: {feature_cache_root}")
     results = evaluate_all_splits(
         loaders=loaders,
         predict_fn=build_predict_fn(model, args.num_inference_steps),
@@ -75,6 +91,7 @@ def main(args):
         eval_frac_curvton=args.eval_frac_curvton,
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
+        feature_cache_root=feature_cache_root,
     )
     print("\nEvaluation metrics:\n" + json.dumps(results, indent=2))
     if args.output_json:
@@ -94,7 +111,7 @@ if __name__ == "__main__":
     p.add_argument("--triplet_test_data_path", type=str, default=TRIPLET_TEST_PATH)
     p.add_argument("--street_tryon_data_path", type=str, default=STREET_TRYON_PATH)
     p.add_argument("--street_split", type=str, default="validation", choices=["train", "validation"])
-    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--num_inference_steps", type=int, default=30)
@@ -103,6 +120,8 @@ if __name__ == "__main__":
     p.add_argument("--eval_frac_triplet", type=float, default=0.30)
     p.add_argument("--eval_frac_street", type=float, default=0.30)
     p.add_argument("--device", type=str, default=None)
+    p.add_argument("--feature_cache_root", type=str, default="/iopsstor/scratch/cscs/dbartaula/featurecache")
+    p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
 
