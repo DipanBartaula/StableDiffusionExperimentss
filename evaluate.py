@@ -58,6 +58,10 @@ def main(args):
             print(f"Loaded checkpoint: {args.checkpoint} (step={step})")
     else:
         print("Using initial CATVTON weights (no checkpoint load).")
+    print("\nDatasets for evaluation:")
+    print(f"- CurvTON test: {args.curvton_test_data_path}")
+    print(f"- Triplet test: {args.triplet_test_data_path}")
+    print(f"- StreetTryOn ({args.street_split}): {args.street_tryon_data_path}")
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,

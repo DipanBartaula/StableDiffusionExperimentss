@@ -63,6 +63,10 @@ def main(args):
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
         print("Using initial IDM-VTON weights (no checkpoint load).")
+    print("\nDatasets for evaluation:")
+    print(f"- CurvTON test: {args.curvton_test_data_path}")
+    print(f"- Triplet test: {args.triplet_test_data_path}")
+    print(f"- StreetTryOn ({args.street_split}): {args.street_tryon_data_path}")
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
         triplet_test_data_path=args.triplet_test_data_path,
@@ -114,5 +118,6 @@ if __name__ == "__main__":
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
