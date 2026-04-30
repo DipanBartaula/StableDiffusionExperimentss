@@ -350,11 +350,19 @@ def _eval_triplet_person_aware_tensor(
     out_size: int,
     pre_resize_size: int = 768,
 ):
-    """Apply person-aware crop to person/tryon, and center crop to cloth."""
-    box = _person_bbox_square_from_image(person_img, margin=0.15)
-    person_c = person_img.crop(box).resize((pre_resize_size, pre_resize_size), Image.BICUBIC)
-    tryon_c = tryon_img.crop(box).resize((pre_resize_size, pre_resize_size), Image.BICUBIC)
-    cloth_c = transforms.CenterCrop(pre_resize_size)(
+    """Apply center-crop preprocessing for triplet eval: 768x768 -> out_size.
+
+    This intentionally avoids person-bbox detection and keeps GT/person/cloth/tryon
+    preprocessing spatially aligned.
+    """
+    center_crop_768 = transforms.CenterCrop(pre_resize_size)
+    person_c = center_crop_768(
+        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(person_img)
+    )
+    tryon_c = center_crop_768(
+        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(tryon_img)
+    )
+    cloth_c = center_crop_768(
         transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(cloth_img)
     )
 
