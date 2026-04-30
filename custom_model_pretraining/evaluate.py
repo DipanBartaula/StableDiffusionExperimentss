@@ -17,6 +17,17 @@ from model import DiT250M, DiTConfig  # noqa: E402
 from utils import make_beta_schedule, sample_ddim_like  # noqa: E402
 
 
+def _log_and_validate_components(model) -> None:
+    required = ["cfg"]
+    print("Model components:")
+    for name in required:
+        comp = getattr(model, name, None)
+        if comp is None:
+            raise RuntimeError(f"Required component missing or failed to load: {name}")
+        print(f"- {name}: loaded ({type(comp).__name__})")
+    print(f"- backbone: loaded ({type(model).__name__})")
+
+
 def _load_cfg(ckpt_cfg: dict) -> DiTConfig:
     return DiTConfig(
         image_size=ckpt_cfg.get("image_size", 64),
@@ -65,6 +76,7 @@ def main(args):
         ckpt = None
         print("Using initial custom DiT weights (no checkpoint load).")
     model = DiT250M(cfg).to(device).eval()
+    _log_and_validate_components(model)
     if ckpt is not None:
         model.load_state_dict(ckpt["model"], strict=True)
         print(f"Loaded custom DiT checkpoint: {args.checkpoint}")
@@ -77,6 +89,9 @@ def main(args):
     alpha_bar = torch.cumprod(alphas, dim=0)
     sqrt_ab = torch.sqrt(alpha_bar)
     sqrt_1mab = torch.sqrt(1 - alpha_bar)
+    if sqrt_ab is None or sqrt_1mab is None:
+        raise RuntimeError("Required diffusion schedule tensors failed to initialize.")
+    print("- diffusion_schedule: loaded (sqrt_ab, sqrt_1mab)")
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,

@@ -17,6 +17,16 @@ from model import SDModel
 from utils import decode_latents, run_full_inference
 
 
+def _log_and_validate_components(model) -> None:
+    required = ["vae", "unet", "text_encoder", "tokenizer", "noise_scheduler"]
+    print("Model components:")
+    for name in required:
+        comp = getattr(model, name, None)
+        if comp is None:
+            raise RuntimeError(f"Required component missing or failed to load: {name}")
+        print(f"- {name}: loaded ({type(comp).__name__})")
+
+
 def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
     # Load checkpoint on CPU first to avoid GPU OOM spikes during deserialization.
     ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -80,6 +90,7 @@ def _resolve_device(args):
 def main(args):
     device = _resolve_device(args)
     model = SDModel().to(device)
+    _log_and_validate_components(model)
     model.unet.eval()
     weight_source = "init_xavier"
     if args.use_init_weights:

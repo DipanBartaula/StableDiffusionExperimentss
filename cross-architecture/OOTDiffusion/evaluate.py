@@ -24,6 +24,16 @@ from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_ootdiffusion_local import OOTDiffusionModel  # noqa: E402
 
 
+def _log_and_validate_components(model) -> None:
+    required = ["vae", "scheduler", "denoising_unet", "outfitting_unet", "outfit_adapter"]
+    print("Model components:")
+    for name in required:
+        comp = getattr(model, name, None)
+        if comp is None:
+            raise RuntimeError(f"Required component missing or failed to load: {name}")
+        print(f"- {name}: loaded ({type(comp).__name__})")
+
+
 def build_predict_fn(model, num_inference_steps: int):
     @torch.no_grad()
     def _predict(batch, device):
@@ -66,6 +76,7 @@ def _resolve_device(args):
 def main(args):
     device = _resolve_device(args)
     model = OOTDiffusionModel(args.model_name, outfitting_dropout=0.0).to(device).eval()
+    _log_and_validate_components(model)
 
     weight_source = "init_xavier"
     if args.use_init_weights:

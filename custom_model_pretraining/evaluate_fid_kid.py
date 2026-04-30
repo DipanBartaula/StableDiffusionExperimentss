@@ -14,6 +14,12 @@ from infer_variant import _build_datapred_model, _build_meanflow_model
 from utils import make_beta_schedule, sample_ddim_like
 
 
+def _log_and_validate_components(model, approach: str) -> None:
+    print("Model components:")
+    print(f"- approach: {approach}")
+    print(f"- backbone: loaded ({type(model).__name__})")
+
+
 def _to_01(x: torch.Tensor) -> torch.Tensor:
     if x.min() < -0.01 or x.max() > 1.01:
         x = (x + 1.0) * 0.5
@@ -97,6 +103,7 @@ def main(args: argparse.Namespace) -> None:
         model = _build_datapred_model(args).to(device).eval()
     else:
         model = _build_meanflow_model(args).to(device).eval()
+    _log_and_validate_components(model, args.approach)
 
     if args.use_init_weights:
         print("Using initial custom DiT weights (no checkpoint load).")

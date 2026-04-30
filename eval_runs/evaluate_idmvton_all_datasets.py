@@ -4,7 +4,8 @@ import json
 import re
 import subprocess
 import sys
-RUN_NAME = "train_idm_vton"
+
+RUN_NAME = "train_idm_vton"
 CKPT_DIR = Path("/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_idm_vton/checkpoints")
 COMMAND = [
     "python",
@@ -67,33 +68,24 @@ def _print_output_json_if_available(cmd_tokens):
 
 
 def main() -> int:
-    ckpt_path = None
-    if CKPT_DIR.exists():
-        try:
-            ckpt_path = _latest_ckpt(CKPT_DIR)
-        except FileNotFoundError:
-            ckpt_path = None
+    if not CKPT_DIR.exists():
+        print(f"Evaluating run: {RUN_NAME}")
+        print(f"Checkpoint directory not found: {CKPT_DIR}")
+        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+        return 1
 
-    if ckpt_path is not None:
-        cmd = [str(ckpt_path) if t == "__CKPT_PATH__" else t for t in COMMAND]
-    else:
-        cmd = []
-        skip_next = False
-        for i, t in enumerate(COMMAND):
-            if skip_next:
-                skip_next = False
-                continue
-            if t == "--checkpoint" and i + 1 < len(COMMAND) and COMMAND[i + 1] == "__CKPT_PATH__":
-                skip_next = True
-                continue
-            cmd.append(t)
+    try:
+        ckpt_path = _latest_ckpt(CKPT_DIR)
+    except FileNotFoundError:
+        print(f"Evaluating run: {RUN_NAME}")
+        print(f"No checkpoint found in: {CKPT_DIR}")
+        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+        return 1
+
+    cmd = [str(ckpt_path) if t == '__CKPT_PATH__' else t for t in COMMAND]
 
     print(f"Evaluating run: {RUN_NAME}")
-    if ckpt_path is not None:
-        print(f"Using checkpoint: {ckpt_path}")
-    else:
-        print(f"No checkpoint available in: {CKPT_DIR}")
-        print("Evaluating with initial (Xavier/init) weights.")
+    print(f"Using checkpoint: {ckpt_path}")
     print("Command:", " ".join(cmd))
 
     result = subprocess.run(cmd)
