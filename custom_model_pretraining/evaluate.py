@@ -115,13 +115,14 @@ if __name__ == "__main__":
     p.add_argument("--diffusion_steps", type=int, default=100)
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.25)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.25)
-    p.add_argument("--eval_frac_street", type=float, default=0.25)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.02)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.02)
+    p.add_argument("--eval_frac_street", type=float, default=0.02)
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--use_init_weights", action="store_true", default=False)
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 

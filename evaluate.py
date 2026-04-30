@@ -158,9 +158,9 @@ if __name__ == "__main__":
                    help="Disable fp16 decode autocast.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.25)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.25)
-    p.add_argument("--eval_frac_street", type=float, default=0.25)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.02)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.02)
+    p.add_argument("--eval_frac_street", type=float, default=0.02)
     p.add_argument(
         "--curvton_splits",
         type=str,
@@ -175,6 +175,7 @@ if __name__ == "__main__":
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 

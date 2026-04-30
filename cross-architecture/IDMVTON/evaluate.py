@@ -141,15 +141,16 @@ if __name__ == "__main__":
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--num_inference_steps", type=int, default=30)
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
-    p.add_argument("--eval_frac_curvton", type=float, default=0.25)
-    p.add_argument("--eval_frac_triplet", type=float, default=0.25)
-    p.add_argument("--eval_frac_street", type=float, default=0.25)
+    p.add_argument("--eval_frac_curvton", type=float, default=0.02)
+    p.add_argument("--eval_frac_triplet", type=float, default=0.02)
+    p.add_argument("--eval_frac_street", type=float, default=0.02)
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--cuda_device", type=int, default=None, help="CUDA device index (e.g., 1 -> cuda:1). Ignored if --device is set.")
     p.add_argument("--feature_cache_root", type=str, default="/iopsstor/scratch/cscs/dbartaula/featurecache")
     p.add_argument("--feature_cache_dir", type=str, default=None, help="Optional explicit feature-cache directory for this eval run")
     p.add_argument("--output_json", type=str, default=None)
     main(p.parse_args())
+
 
 
 

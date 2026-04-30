@@ -17,6 +17,36 @@ from torchvision import transforms
 logging.getLogger("PIL").setLevel(logging.WARNING)
 logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
 
+
+def _configure_quiet_eval_logging() -> None:
+    # Keep eval output focused on checkpoint used + split progress + metrics.
+    noisy = [
+        "httpcore",
+        "httpx",
+        "urllib3",
+        "huggingface_hub",
+        "transformers",
+        "PIL",
+        "PIL.PngImagePlugin",
+        "matplotlib",
+    ]
+    for name in noisy:
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+    # If root is set to DEBUG by environment, raise it to INFO.
+    root = logging.getLogger()
+    if root.level <= logging.DEBUG:
+        root.setLevel(logging.INFO)
+
+    try:
+        from transformers.utils import logging as hf_logging  # type: ignore
+        hf_logging.set_verbosity_error()
+    except Exception:
+        pass
+
+
+_configure_quiet_eval_logging()
+
 try:
     import lpips as lpips_lib
 except ImportError as exc:
@@ -338,9 +368,10 @@ def evaluate_loader(
                 pred_img = pred_cpu[i].permute(1, 2, 0).numpy()
                 gt_img = gt_cpu[i].permute(1, 2, 0).numpy()
                 diff_img = np.abs(pred_img.astype(np.int16) - gt_img.astype(np.int16)).astype(np.uint8)
-                Image.fromarray(pred_img).save(gen_dir / f"{sample_idx:08d}.png")
-                Image.fromarray(gt_img).save(gt_dir / f"{sample_idx:08d}.png")
-                Image.fromarray(diff_img).save(diff_dir / f"{sample_idx:08d}.png")
+                stem = f"sample_{sample_idx:08d}"
+                Image.fromarray(pred_img).save(gen_dir / f"{stem}__generated.png")
+                Image.fromarray(gt_img).save(gt_dir / f"{stem}__target.png")
+                Image.fromarray(diff_img).save(diff_dir / f"{stem}__generated_vs_target_diff_abs.png")
 
     out = {"n_images": int(n_img)}
     if paired_metrics and n_img > 0:
@@ -393,9 +424,9 @@ def evaluate_all_splits(
     predict_fn: Callable[[dict, torch.device], torch.Tensor],
     device: torch.device,
     max_batches: int = 0,
-    eval_frac_curvton: float = 0.25,
-    eval_frac_triplet: float = 0.25,
-    eval_frac_street: float = 0.25,
+    eval_frac_curvton: float = 0.02,
+    eval_frac_triplet: float = 0.02,
+    eval_frac_street: float = 0.02,
     feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()
