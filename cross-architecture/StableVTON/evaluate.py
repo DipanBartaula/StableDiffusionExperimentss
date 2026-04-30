@@ -26,7 +26,7 @@ from train_stable_vton_local import StableVTONModel, stableviton_preprocess  # n
 
 
 def _log_and_validate_components(model) -> None:
-    required = ["vae", "scheduler", "unet", "text_encoder", "tokenizer"]
+    required = ["vae", "scheduler", "unet"]
     print("Model components:")
     for name in required:
         comp = getattr(model, name, None)

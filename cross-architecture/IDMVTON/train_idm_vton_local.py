@@ -1,9 +1,8 @@
 """IDM-VTON architecture-faithful local trainer for CurvTON.
 
-This keeps the official IDM-VTON component graph local:
+This keeps an IDM-VTON-style component graph local:
 - SDXL inpainting UNet modified to 13 input channels.
 - Garment reference UNet from SDXL base.
-- CLIP text encoders/tokenizers for person and cloth prompts.
 - CLIP vision encoder plus IP-Adapter-style Resampler tokens.
 
 Dataset adaptation:
@@ -23,9 +22,6 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.optim import AdamW
 from transformers import (
     CLIPImageProcessor,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
     CLIPVisionModelWithProjection,
 )
 
@@ -83,13 +79,6 @@ class IDMVTONModel(nn.Module):
             subfolder="scheduler",
             rescale_betas_zero_snr=True,
         )
-        self.tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer")
-        self.tokenizer_2 = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer_2")
-        self.text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder")
-        self.text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="text_encoder_2",
-        )
         self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_path)
         self.unet_encoder = UNet2DConditionModel.from_pretrained(args.pretrained_garmentnet_path, subfolder="unet")
         self.unet_encoder.config.addition_embed_type = None
@@ -121,8 +110,6 @@ class IDMVTONModel(nn.Module):
         self.clip_processor = CLIPImageProcessor()
 
         self.vae.requires_grad_(False)
-        self.text_encoder.requires_grad_(False)
-        self.text_encoder_2.requires_grad_(False)
         self.image_encoder.requires_grad_(False)
         self.unet_encoder.requires_grad_(False)
 
@@ -155,28 +142,25 @@ class IDMVTONModel(nn.Module):
         latents = self.vae.encode(image).latent_dist.sample()
         return latents * self.vae.config.scaling_factor
 
-    def encode_prompt(self, prompts, tokenizer, text_encoder):
-        ids = tokenizer(
-            prompts,
-            max_length=tokenizer.model_max_length,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        ).input_ids.to(next(text_encoder.parameters()).device)
-        return text_encoder(ids, output_hidden_states=True)
-
-    def prompt_embeds(self, prompts):
-        out_1 = self.encode_prompt(prompts, self.tokenizer, self.text_encoder)
-        out_2 = self.encode_prompt(prompts, self.tokenizer_2, self.text_encoder_2)
-        return torch.cat([out_1.hidden_states[-2], out_2.hidden_states[-2]], dim=-1), out_2[0]
+    def prompt_embeds(self, batch_size, device, dtype):
+        seq_len = 77
+        hidden = torch.zeros(
+            batch_size, seq_len, self.cross_attention_dim, device=device, dtype=dtype
+        )
+        # SDXL UNet expects pooled text vector for added_cond_kwargs["text_embeds"].
+        proj_in = int(getattr(self.unet.config, "projection_class_embeddings_input_dim", 2816))
+        pooled_dim = max(1, proj_in - 6 * 256)
+        pooled = torch.zeros(batch_size, pooled_dim, device=device, dtype=dtype)
+        return hidden, pooled
 
     def add_time_ids(self, batch_size, height, width, device):
         ids = torch.tensor([height, width, 0, 0, height, width], device=device)
         return ids.unsqueeze(0).repeat(batch_size, 1)
 
-    def forward(self, noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps, captions, cloth_captions):
-        encoder_hidden_states, pooled = self.prompt_embeds(captions)
-        cloth_hidden, _ = self.prompt_embeds(cloth_captions)
+    def forward(self, noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps, captions=None, cloth_captions=None):
+        del captions, cloth_captions
+        encoder_hidden_states, pooled = self.prompt_embeds(noisy.shape[0], noisy.device, noisy.dtype)
+        cloth_hidden, _ = self.prompt_embeds(noisy.shape[0], noisy.device, noisy.dtype)
         add_time_ids = self.add_time_ids(noisy.shape[0], noisy.shape[-2] * 8, noisy.shape[-1] * 8, noisy.device)
 
         # Official IDM gets IP tokens from CLIPVision cloth image embeddings.
@@ -246,10 +230,8 @@ def train(args):
                 device=target_lat.device,
             ).long()
             noisy = model.scheduler.add_noise(target_lat, noise, timesteps)
-            captions = ["model is wearing a garment"] * target_lat.shape[0]
-            cloth_captions = ["a photo of a garment"] * target_lat.shape[0]
             with autocast(enabled=(dist_info.device.type == "cuda")):
-                pred = model(noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps, captions, cloth_captions)
+                pred = model(noisy, person_mask, person_lat, pose_lat, cloth, cloth_lat, timesteps)
                 target = noise if model.scheduler.config.prediction_type == "epsilon" else model.scheduler.get_velocity(target_lat, noise, timesteps)
                 loss = F.mse_loss(pred.float(), target.float())
 

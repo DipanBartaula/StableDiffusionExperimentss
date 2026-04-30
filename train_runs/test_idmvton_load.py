@@ -99,9 +99,6 @@ def main():
     timesteps = torch.randint(
         0, model.scheduler.config.num_train_timesteps, (b,), device=device
     ).long()
-    captions = ["model is wearing a garment"] * b
-    cloth_captions = ["a photo of a garment"] * b
-
     pred = model(
         noisy,
         person_mask,
@@ -110,8 +107,6 @@ def main():
         cloth,
         cloth_lat,
         timesteps,
-        captions,
-        cloth_captions,
     )
     target = torch.randn_like(pred)
     loss = (pred - target).pow(2).mean()
@@ -119,7 +114,7 @@ def main():
 
     if rank == 0:
         print("[OK] IDMVTONModel loaded successfully.")
-        print("[OK] Components: vae, scheduler, tokenizers/text encoders, image_encoder, unet_encoder, unet, image_proj_model")
+        print("[OK] Components: vae, scheduler, image_encoder, unet_encoder, unet, image_proj_model")
         print(f"[OK] multi-gpu forward+backward passed. rank0 loss={loss.item():.6f}")
 
     _finish_dist(use_dist)

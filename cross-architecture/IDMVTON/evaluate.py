@@ -26,7 +26,7 @@ from train_idm_vton_local import IDMVTONModel  # noqa: E402
 
 
 def _log_and_validate_components(model) -> None:
-    required = ["vae", "scheduler", "unet", "text_encoder", "tokenizer", "image_encoder", "image_proj_model"]
+    required = ["vae", "scheduler", "unet", "image_encoder", "image_proj_model"]
     print("Model components:")
     for name in required:
         comp = getattr(model, name, None)
@@ -49,12 +49,10 @@ def build_predict_fn(model, num_inference_steps: int):
         )
         person_mask = F.interpolate(person_mask, size=person_lat.shape[-2:], mode="bilinear", align_corners=False)
         latents = torch.randn_like(person_lat)
-        captions = ["model is wearing a garment"] * latents.shape[0]
-        cloth_captions = ["a photo of a garment"] * latents.shape[0]
         model.scheduler.set_timesteps(num_inference_steps, device=device)
         for t in model.scheduler.timesteps:
             t_batch = torch.full((latents.shape[0],), int(t), device=device, dtype=torch.long)
-            noise_pred = model(latents, person_mask, person_lat, pose_lat, cloth, cloth_lat, t_batch, captions, cloth_captions)
+            noise_pred = model(latents, person_mask, person_lat, pose_lat, cloth, cloth_lat, t_batch)
             latents = model.scheduler.step(noise_pred, t, latents).prev_sample
         return model.vae.decode(latents / model.vae.config.scaling_factor).sample
 

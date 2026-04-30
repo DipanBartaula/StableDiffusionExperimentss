@@ -18,7 +18,9 @@ from utils import decode_latents, run_full_inference
 
 
 def _log_and_validate_components(model) -> None:
-    required = ["vae", "unet", "text_encoder", "tokenizer", "noise_scheduler"]
+    # CATVTON path in this repo uses image-latent conditioning and does not
+    # require text encoder/tokenizer at runtime.
+    required = ["vae", "unet", "scheduler"]
     print("Model components:")
     for name in required:
         comp = getattr(model, name, None)
