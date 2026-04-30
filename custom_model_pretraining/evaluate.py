@@ -17,6 +17,18 @@ from model import DiT250M, DiTConfig  # noqa: E402
 from utils import make_beta_schedule, sample_ddim_like  # noqa: E402
 
 
+def _clean_state_dict(sd):
+    out = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        out[nk] = v
+    return out
+
+
 def _log_and_validate_components(model) -> None:
     required = ["cfg"]
     print("Model components:")
@@ -78,7 +90,7 @@ def main(args):
     model = DiT250M(cfg).to(device).eval()
     _log_and_validate_components(model)
     if ckpt is not None:
-        model.load_state_dict(ckpt["model"], strict=True)
+        model.load_state_dict(_clean_state_dict(ckpt["model"]), strict=True)
         print(f"Loaded custom DiT checkpoint: {args.checkpoint}")
     else:
         print("Using initial custom DiT weights (no checkpoint load).")

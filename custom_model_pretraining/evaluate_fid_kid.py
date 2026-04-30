@@ -14,6 +14,18 @@ from infer_variant import _build_datapred_model, _build_meanflow_model
 from utils import make_beta_schedule, sample_ddim_like
 
 
+def _clean_state_dict(sd):
+    out = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        out[nk] = v
+    return out
+
+
 def _log_and_validate_components(model, approach: str) -> None:
     print("Model components:")
     print(f"- approach: {approach}")
@@ -109,7 +121,7 @@ def main(args: argparse.Namespace) -> None:
         print("Using initial custom DiT weights (no checkpoint load).")
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location=device)
-        model.load_state_dict(ckpt["model"], strict=False)
+        model.load_state_dict(_clean_state_dict(ckpt["model"]), strict=False)
         weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:

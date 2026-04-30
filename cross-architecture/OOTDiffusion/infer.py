@@ -4,6 +4,7 @@ import sys
 
 import torch
 from PIL import Image
+from torchvision import transforms
 
 
 THIS_DIR = os.path.dirname(__file__)
@@ -13,6 +14,27 @@ if CROSS_ARCH_DIR not in sys.path:
 
 from common import DistInfo, batch_images, build_curvton_loader, latest_checkpoint  # noqa: E402
 from train_ootdiffusion_local import OOTDiffusionModel  # noqa: E402
+
+
+def _clean_state_dict(sd):
+    out = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        out[nk] = v
+    return out
+
+
+def _load_image(path: str, size: int) -> torch.Tensor:
+    tf = transforms.Compose([
+        transforms.Resize((size, size)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+    ])
+    return tf(Image.open(path).convert("RGB")).unsqueeze(0)
 
 
 def save_tensor_image(tensor, path):
@@ -31,25 +53,17 @@ def infer(args):
     if ckpt_path is None:
         raise FileNotFoundError(f"No checkpoint found in {run_dir}")
     ckpt = torch.load(ckpt_path, map_location=device)
-    model.denoising_unet.load_state_dict(ckpt["denoising_unet_state_dict"])
-    model.outfitting_unet.load_state_dict(ckpt["outfitting_unet_state_dict"])
-    model.outfit_adapter.load_state_dict(ckpt["outfit_adapter_state_dict"])
+    model.denoising_unet.load_state_dict(_clean_state_dict(ckpt["denoising_unet_state_dict"]), strict=False)
+    model.outfitting_unet.load_state_dict(_clean_state_dict(ckpt["outfitting_unet_state_dict"]), strict=False)
+    model.outfit_adapter.load_state_dict(_clean_state_dict(ckpt["outfit_adapter_state_dict"]), strict=False)
 
     os.makedirs(args.save_dir, exist_ok=True)
-    loader_args = argparse.Namespace(
-        curvton_data_path=args.curvton_data_path,
-        difficulty=args.difficulty,
-        gender=args.gender,
-        batch_size=1,
-        num_workers=args.num_workers,
-    )
-    dist_info = DistInfo(rank=0, local_rank=0, world_size=1, device=device, is_main=True)
-    loader, _ = build_curvton_loader(loader_args, dist_info)
 
     written = 0
     with torch.no_grad():
-        for batch in loader:
-            person, cloth, _ = batch_images(batch, device)
+        if args.person and args.cloth:
+            person = _load_image(args.person, args.size).to(device)
+            cloth = _load_image(args.cloth, args.size).to(device)
             person_lat = model.encode(person)
             cloth_lat = model.encode(cloth)
             latents = torch.randn_like(person_lat)
@@ -61,17 +75,44 @@ def infer(args):
                 latents = model.scheduler.step(noise_pred, t, latents).prev_sample
 
             out = model.vae.decode(latents / model.vae.config.scaling_factor).sample
-            save_tensor_image(out[0], os.path.join(args.save_dir, f"oot_{written:05d}.png"))
-            written += 1
-            if written >= args.num_samples:
-                break
+            out_path = args.output if args.output else os.path.join(args.save_dir, "oot_single.png")
+            save_tensor_image(out[0], out_path)
+            print(f"Inference complete. Saved 1 image to {out_path}")
+            return
+        else:
+            loader_args = argparse.Namespace(
+                curvton_data_path=args.curvton_data_path,
+                difficulty=args.difficulty,
+                gender=args.gender,
+                batch_size=1,
+                num_workers=args.num_workers,
+            )
+            dist_info = DistInfo(rank=0, local_rank=0, world_size=1, device=device, is_main=True)
+            loader, _ = build_curvton_loader(loader_args, dist_info)
+            for batch in loader:
+                person, cloth, _ = batch_images(batch, device)
+                person_lat = model.encode(person)
+                cloth_lat = model.encode(cloth)
+                latents = torch.randn_like(person_lat)
+
+                model.scheduler.set_timesteps(args.num_inference_steps, device=device)
+                for t in model.scheduler.timesteps:
+                    t_batch = torch.full((latents.shape[0],), int(t), device=device, dtype=torch.long)
+                    noise_pred = model(latents, person_lat, cloth_lat, t_batch)
+                    latents = model.scheduler.step(noise_pred, t, latents).prev_sample
+
+                out = model.vae.decode(latents / model.vae.config.scaling_factor).sample
+                save_tensor_image(out[0], os.path.join(args.save_dir, f"oot_{written:05d}.png"))
+                written += 1
+                if written >= args.num_samples:
+                    break
 
     print(f"Inference complete. Saved {written} images to {args.save_dir}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="OOTDiffusion local inference")
-    parser.add_argument("--curvton_data_path", type=str, required=True)
+    parser.add_argument("--curvton_data_path", type=str, default=None)
     parser.add_argument("--difficulty", type=str, default="all", choices=["easy", "medium", "hard", "all", "easy_hard", "medium_hard"])
     parser.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     parser.add_argument("--model_name", type=str, default="runwayml/stable-diffusion-v1-5")
@@ -83,4 +124,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--device", type=str, default=None)
-    infer(parser.parse_args())
+    parser.add_argument("--person", type=str, default=None, help="Single-image inference person path")
+    parser.add_argument("--cloth", type=str, default=None, help="Single-image inference cloth path")
+    parser.add_argument("--output", type=str, default=None, help="Single-image output path")
+    parser.add_argument("--size", type=int, default=512, help="Resize for single-image inference")
+    args = parser.parse_args()
+    if not (args.person and args.cloth) and not args.curvton_data_path:
+        parser.error("Provide either --person and --cloth (single-image mode) or --curvton_data_path (dataset mode).")
+    infer(args)

@@ -24,6 +24,18 @@ from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_ootdiffusion_local import OOTDiffusionModel  # noqa: E402
 
 
+def _clean_state_dict(sd):
+    out = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        out[nk] = v
+    return out
+
+
 def _log_and_validate_components(model) -> None:
     required = ["vae", "scheduler", "denoising_unet", "outfitting_unet", "outfit_adapter"]
     print("Model components:")
@@ -83,9 +95,9 @@ def main(args):
         print("Using initial OOTDiffusion weights (no checkpoint load).")
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location="cpu")
-        model.denoising_unet.load_state_dict(ckpt["denoising_unet_state_dict"])
-        model.outfitting_unet.load_state_dict(ckpt["outfitting_unet_state_dict"])
-        model.outfit_adapter.load_state_dict(ckpt["outfit_adapter_state_dict"])
+        model.denoising_unet.load_state_dict(_clean_state_dict(ckpt["denoising_unet_state_dict"]), strict=False)
+        model.outfitting_unet.load_state_dict(_clean_state_dict(ckpt["outfitting_unet_state_dict"]), strict=False)
+        model.outfit_adapter.load_state_dict(_clean_state_dict(ckpt["outfit_adapter_state_dict"]), strict=False)
         weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:

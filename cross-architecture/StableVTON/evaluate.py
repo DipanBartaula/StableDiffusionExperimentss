@@ -25,6 +25,18 @@ from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_stable_vton_local import StableVTONModel, stableviton_preprocess  # noqa: E402
 
 
+def _clean_state_dict(sd):
+    out = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        out[nk] = v
+    return out
+
+
 def _log_and_validate_components(model) -> None:
     required = ["vae", "scheduler", "unet"]
     print("Model components:")
@@ -87,7 +99,7 @@ def main(args):
         print("Using initial StableVTON weights (no checkpoint load).")
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location="cpu")
-        model.unet.load_state_dict(ckpt["model_state_dict"], strict=False)
+        model.unet.load_state_dict(_clean_state_dict(ckpt["model_state_dict"]), strict=False)
         weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:

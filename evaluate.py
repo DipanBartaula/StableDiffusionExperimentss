@@ -40,7 +40,14 @@ def _load_unet_checkpoint(unet, checkpoint_path: str, device: torch.device):
         sd = ckpt["state_dict"]
     else:
         sd = ckpt
-    clean = {k.removeprefix("module."): v for k, v in sd.items()}
+    clean = {}
+    for k, v in sd.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        clean[nk] = v
     unet.load_state_dict(clean, strict=False)
     return ckpt.get("step", None)
 

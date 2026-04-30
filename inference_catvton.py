@@ -104,7 +104,14 @@ def load_checkpoint(unet: UNet2DConditionModel, ckpt_path: str):
         state_dict = ckpt
 
     # Strip 'module.' prefix added by DDP
-    clean = {k.replace("module.", ""): v for k, v in state_dict.items()}
+    clean = {}
+    for k, v in state_dict.items():
+        nk = k
+        if nk.startswith("module."):
+            nk = nk[len("module."):]
+        if nk.startswith("_orig_mod."):
+            nk = nk[len("_orig_mod."):]
+        clean[nk] = v
 
     missing, unexpected = unet.load_state_dict(clean, strict=False)
     if missing:
