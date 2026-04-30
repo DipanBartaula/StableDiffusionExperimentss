@@ -24,9 +24,9 @@ COMMAND = [
     "16",
     "--num_workers",
     "8",
-    "--eval_frac_curvton", "0.02",
-    "--eval_frac_triplet", "0.02",
-    "--eval_frac_street", "0.02",
+    "--eval_frac_curvton", "0.25",
+    "--eval_frac_triplet", "0.25",
+    "--eval_frac_street", "0.25",
     "--output_json",
     "/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_idm_vton/eval_metrics.json",
 ]
@@ -100,6 +100,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1)
+
 
 
 

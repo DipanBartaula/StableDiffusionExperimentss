@@ -7,7 +7,7 @@ import sys
 
 RUN_NAME = 'Stable_diffusion_train_custom_dit_meanflow_400m_30000steps'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_meanflow_400m_30000steps/checkpoints')
-COMMAND = ['python', 'custom_model_pretraining/evaluate_fid_kid.py', '--approach', 'meanflow', '--model_size', '400m', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--image_size', '64', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.02', '--output_json', '/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_meanflow_400m_30000steps/eval_fid_kid.json']
+COMMAND = ['python', 'custom_model_pretraining/evaluate_fid_kid.py', '--approach', 'meanflow', '--model_size', '400m', '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--image_size', '64', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.25', '--output_json', '/iopsstor/scratch/cscs/dbartaula/experiments_assets/Stable_diffusion_train_custom_dit_meanflow_400m_30000steps/eval_fid_kid.json']
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:
@@ -84,6 +84,7 @@ if __name__ == '__main__':
     except Exception as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         raise SystemExit(1)
+
 
 
 

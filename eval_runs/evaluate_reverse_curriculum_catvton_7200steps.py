@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EVAL_SCRIPT = REPO_ROOT / 'evaluate.py'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/Stable_diffusion_train_reverse_curriculum_catvton_7200steps/checkpoints')
 RUN_NAME = CKPT_DIR.parent.name
-COMMAND = ['python', str(EVAL_SCRIPT), '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.02', '--curvton_splits', 'easy,medium,hard']
+COMMAND = ['python', str(EVAL_SCRIPT), '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.25', '--curvton_splits', 'easy,medium,hard']
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:
@@ -85,6 +85,7 @@ if __name__ == '__main__':
     except Exception as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         raise SystemExit(1)
+
 
 
 
