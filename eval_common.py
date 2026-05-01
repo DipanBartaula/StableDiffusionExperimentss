@@ -284,10 +284,14 @@ def evaluate_loader(
     est_n = len(loader.dataset) if hasattr(loader, "dataset") else 256
     kid_subset = max(2, min(50, int(est_n)))
 
-    # We feed uint8 [0,255] tensors to torchmetrics FID/KID, so normalize must be False.
+    # Compute FID in both input conventions:
+    # - normalize=False expects uint8 [0,255]
+    # - normalize=True expects float [0,1]
     fid_p = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=False).to(device) if paired_metrics else None
+    fid_p_norm_true = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=True).to(device) if paired_metrics else None
     kid_p = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=False, subset_size=kid_subset).to(device) if paired_metrics else None
     fid_u = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=False).to(device) if unpaired_metrics else None
+    fid_u_norm_true = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=True).to(device) if unpaired_metrics else None
     kid_u = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=False, subset_size=kid_subset).to(device) if unpaired_metrics else None
 
     lpips_sum = 0.0
@@ -342,14 +346,19 @@ def evaluate_loader(
             psnr_sum += float(psnr_metric(pred, gt).item()) * bs
             fid_p.update(gt_u8, real=True)
             fid_p.update(pred_u8, real=False)
+            fid_p_norm_true.update(gt, real=True)
+            fid_p_norm_true.update(pred, real=False)
             kid_p.update(gt_u8, real=True)
             kid_p.update(pred_u8, real=False)
 
         if unpaired_metrics:
             perm = torch.randperm(bs, device=gt_u8.device)
             gt_shuf = gt_u8[perm]
+            gt_shuf_f = gt[perm]
             fid_u.update(gt_shuf, real=True)
             fid_u.update(pred_u8, real=False)
+            fid_u_norm_true.update(gt_shuf_f, real=True)
+            fid_u_norm_true.update(pred, real=False)
             kid_u.update(gt_shuf, real=True)
             kid_u.update(pred_u8, real=False)
 
@@ -380,8 +389,11 @@ def evaluate_loader(
         out["ssim"] = ssim_sum / n_img
         out["psnr"] = psnr_sum / n_img
         fidp = _safe_compute(fid_p)
+        fidp_true = _safe_compute(fid_p_norm_true)
         kidp = _safe_compute(kid_p)
         out["fid_paired"] = fidp if fidp is not None else float("nan")
+        out["fid_paired_norm_false"] = fidp if fidp is not None else float("nan")
+        out["fid_paired_norm_true"] = fidp_true if fidp_true is not None else float("nan")
         if isinstance(kidp, tuple):
             out["kid_paired_mean"], out["kid_paired_std"] = kidp
         else:
@@ -389,8 +401,11 @@ def evaluate_loader(
 
     if unpaired_metrics and n_img > 0:
         fidu = _safe_compute(fid_u)
+        fidu_true = _safe_compute(fid_u_norm_true)
         kidu = _safe_compute(kid_u)
         out["fid_unpaired"] = fidu if fidu is not None else float("nan")
+        out["fid_unpaired_norm_false"] = fidu if fidu is not None else float("nan")
+        out["fid_unpaired_norm_true"] = fidu_true if fidu_true is not None else float("nan")
         if isinstance(kidu, tuple):
             out["kid_unpaired_mean"], out["kid_unpaired_std"] = kidu
         else:
@@ -409,7 +424,15 @@ def summarize_group(title: str, results: Dict[str, dict]):
         if "lpips" in m:
             print(f"LPIPS={m['lpips']:.4f}  SSIM={m['ssim']:.4f}  PSNR={m['psnr']:.2f}")
             print(f"FID(paired)={m.get('fid_paired', float('nan')):.4f}  KID(paired)={m.get('kid_paired_mean', float('nan')):.6f}")
+            print(
+                f"FID(paired,norm_false)={m.get('fid_paired_norm_false', float('nan')):.4f}  "
+                f"FID(paired,norm_true)={m.get('fid_paired_norm_true', float('nan')):.4f}"
+            )
         print(f"FID(unpaired)={m.get('fid_unpaired', float('nan')):.4f}  KID(unpaired)={m.get('kid_unpaired_mean', float('nan')):.6f}")
+        print(
+            f"FID(unpaired,norm_false)={m.get('fid_unpaired_norm_false', float('nan')):.4f}  "
+            f"FID(unpaired,norm_true)={m.get('fid_unpaired_norm_true', float('nan')):.4f}"
+        )
 
 
 def summarize_single(split: str, m: dict):
@@ -417,7 +440,15 @@ def summarize_single(split: str, m: dict):
     if "lpips" in m:
         print(f"LPIPS={m['lpips']:.4f}  SSIM={m['ssim']:.4f}  PSNR={m['psnr']:.2f}")
         print(f"FID(paired)={m.get('fid_paired', float('nan')):.4f}  KID(paired)={m.get('kid_paired_mean', float('nan')):.6f}")
+        print(
+            f"FID(paired,norm_false)={m.get('fid_paired_norm_false', float('nan')):.4f}  "
+            f"FID(paired,norm_true)={m.get('fid_paired_norm_true', float('nan')):.4f}"
+        )
     print(f"FID(unpaired)={m.get('fid_unpaired', float('nan')):.4f}  KID(unpaired)={m.get('kid_unpaired_mean', float('nan')):.6f}")
+    print(
+        f"FID(unpaired,norm_false)={m.get('fid_unpaired_norm_false', float('nan')):.4f}  "
+        f"FID(unpaired,norm_true)={m.get('fid_unpaired_norm_true', float('nan')):.4f}"
+    )
 
 
 def evaluate_all_splits(
