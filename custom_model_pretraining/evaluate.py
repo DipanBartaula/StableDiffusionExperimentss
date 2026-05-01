@@ -11,7 +11,12 @@ STABLE_DIR = os.path.abspath(os.path.join(THIS_DIR, ".."))
 if STABLE_DIR not in sys.path:
     sys.path.insert(0, STABLE_DIR)
 
-from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
+try:
+    from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH  # noqa: E402
+except Exception:
+    CURVTON_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
+    TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
+    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/benchmark_datasets/street_tryon"
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from model import DiT250M, DiTConfig  # noqa: E402
 from utils import make_beta_schedule, sample_ddim_like  # noqa: E402

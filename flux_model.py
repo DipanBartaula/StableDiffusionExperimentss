@@ -28,7 +28,10 @@ import torch.nn as nn
 from diffusers import AutoencoderKL, FlowMatchEulerDiscreteScheduler
 from diffusers.models.transformers import FluxTransformer2DModel
 
-from config import FLUX_MODEL_NAME
+try:
+    from config import FLUX_MODEL_NAME
+except Exception:
+    FLUX_MODEL_NAME = "black-forest-labs/FLUX.1-dev"
 
 
 # ============================================================

@@ -49,10 +49,17 @@ from tqdm import tqdm
 import wandb
 import weave
 
-from config import (
-    WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY,
-    HUNYUAN_MODEL_NAME, IMAGE_SIZE,
-)
+try:
+    from config import (
+        WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY,
+        HUNYUAN_MODEL_NAME, IMAGE_SIZE,
+    )
+except Exception:
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY", "")
+    WANDB_PROJECT = os.getenv("WANDB_PROJECT", "Stable_diffusion")
+    WANDB_ENTITY = os.getenv("WANDB_ENTITY", "")
+    HUNYUAN_MODEL_NAME = os.getenv("HUNYUAN_MODEL_NAME", "Tencent-Hunyuan/HunyuanDiT-v1.1-Diffusers-Distilled")
+    IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))
 from hunyuan_model import (
     HunyuanDiTModel,
     freeze_non_attention_hunyuan,

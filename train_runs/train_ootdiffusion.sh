@@ -15,7 +15,7 @@ set -euo pipefail
 # Architecture: latent diffusion with outfitting-fusion person/garment latents.
 # Loss: diffusion denoising objective on predicted noise.
 
-WORK_DIR="${WORK_DIR:-/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion}"
+WORK_DIR="${WORK_DIR:-/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss}"
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-/iopsstor/scratch/cscs/dbartaula/experiments_assets}"
 
@@ -27,7 +27,7 @@ unset PYTHONPATH || true
 
 # Activate the intended conda env used on the cluster.
 CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-Dipan}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch27_env_new}"
 if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
   source "$CONDA_ROOT/etc/profile.d/conda.sh"
 else

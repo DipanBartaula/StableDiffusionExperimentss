@@ -51,7 +51,14 @@ try:
 except Exception:
     weave = None
 
-from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, MODEL_NAME, IMAGE_SIZE as CFG_IMAGE_SIZE
+try:
+    from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, MODEL_NAME, IMAGE_SIZE as CFG_IMAGE_SIZE
+except Exception:
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY", "")
+    WANDB_PROJECT = os.getenv("WANDB_PROJECT", "Stable_diffusion")
+    WANDB_ENTITY = os.getenv("WANDB_ENTITY", "")
+    MODEL_NAME = os.getenv("MODEL_NAME", "runwayml/stable-diffusion-v1-5")
+    CFG_IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))
 from model import SDModel, freeze_non_attention, print_trainable_params
 from utils import (
     VitonHDDataset,

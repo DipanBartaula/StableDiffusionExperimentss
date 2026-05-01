@@ -32,7 +32,11 @@ from diffusers import (
     UNet2DConditionModel,
 )
 
-from config import MODEL_NAME, IMAGE_SIZE
+try:
+    from config import MODEL_NAME, IMAGE_SIZE
+except Exception:
+    MODEL_NAME = os.getenv("MODEL_NAME", "runwayml/stable-diffusion-v1-5")
+    IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))
 
 
 # ─────────────────────────────────────────────────────────────

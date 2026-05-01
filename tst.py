@@ -13,7 +13,11 @@ import sys, os, logging, time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from config import TRIPLET_TRAIN_PATH, TRIPLET_TEST_PATH
+try:
+    from config import TRIPLET_TRAIN_PATH, TRIPLET_TEST_PATH
+except Exception:
+    TRIPLET_TRAIN_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
+    TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
 from utils import get_triplet_train_loader, get_triplet_test_dataloaders, collate_fn
 
 # ── Intercept collate warnings to detect padded batches ──────

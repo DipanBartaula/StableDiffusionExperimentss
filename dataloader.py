@@ -42,7 +42,10 @@ from typing import Dict, Optional
 import torch
 from torch.utils.data import DataLoader
 
-from config import IMAGE_SIZE
+try:
+    from config import IMAGE_SIZE
+except Exception:
+    IMAGE_SIZE = 512
 from utils import (
     # Dataset classes
     VitonHDDataset,

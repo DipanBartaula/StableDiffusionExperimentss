@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
+WORK_DIR="/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
 cd "$WORK_DIR"
@@ -18,7 +18,7 @@ unset PYTHONHOME || true
 unset PYTHONPATH || true
 
 CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-Dipan}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch27_env_new}"
 if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then source "$CONDA_ROOT/etc/profile.d/conda.sh"; else source "$HOME/miniforge3/etc/profile.d/conda.sh"; fi
 conda activate "$CONDA_ENV_NAME"
 

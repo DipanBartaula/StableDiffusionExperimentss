@@ -8,7 +8,12 @@ import torch.nn.functional as F
 from torch.utils.data import ConcatDataset, DataLoader
 from torchmetrics.image import FrechetInceptionDistance, KernelInceptionDistance
 
-from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+try:
+    from config import CURVTON_TEST_PATH, STREET_TRYON_PATH, TRIPLET_TEST_PATH
+except Exception:
+    CURVTON_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test"
+    TRIPLET_TEST_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1"
+    STREET_TRYON_PATH = "/iopsstor/scratch/cscs/dbartaula/human_gen/benchmark_datasets/street_tryon"
 from eval_common import build_eval_loaders, evaluate_all_splits
 from infer_variant import _build_datapred_model, _build_meanflow_model
 from utils import make_beta_schedule, sample_ddim_like

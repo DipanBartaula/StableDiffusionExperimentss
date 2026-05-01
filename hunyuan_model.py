@@ -33,7 +33,10 @@ import torch.nn as nn
 from diffusers import AutoencoderKL, DDPMScheduler, UniPCMultistepScheduler
 from diffusers.models.transformers import HunyuanDiT2DModel
 
-from config import HUNYUAN_MODEL_NAME
+try:
+    from config import HUNYUAN_MODEL_NAME
+except Exception:
+    HUNYUAN_MODEL_NAME = "Tencent-Hunyuan/HunyuanDiT-v1.1-Diffusers-Distilled"
 
 
 def _get_parent_and_attr(root: nn.Module, dotted: str):

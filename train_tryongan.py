@@ -50,7 +50,13 @@ from tqdm import tqdm
 import wandb
 import weave
 
-from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, IMAGE_SIZE
+try:
+    from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, IMAGE_SIZE
+except Exception:
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY", "")
+    WANDB_PROJECT = os.getenv("WANDB_PROJECT", "Stable_diffusion")
+    WANDB_ENTITY = os.getenv("WANDB_ENTITY", "")
+    IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))
 from tryongan_model import (
     TryOnGANModel,
     GigaGANTryOnGenerator,

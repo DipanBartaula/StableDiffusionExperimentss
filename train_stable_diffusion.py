@@ -60,10 +60,17 @@ try:
 except ImportError:
     raise ImportError("Install torchmetrics with image extras: pip install torchmetrics[image]")
 
-from config import (
-    WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY,
-    MODEL_NAME, IMAGE_SIZE,
-)
+try:
+    from config import (
+        WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY,
+        MODEL_NAME, IMAGE_SIZE,
+    )
+except Exception:
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY", "")
+    WANDB_PROJECT = os.getenv("WANDB_PROJECT", "Stable_diffusion")
+    WANDB_ENTITY = os.getenv("WANDB_ENTITY", "")
+    MODEL_NAME = os.getenv("MODEL_NAME", "runwayml/stable-diffusion-v1-5")
+    IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))
 
 # ============================================================
 # VITON-HD DATASET
@@ -203,7 +210,12 @@ def collate_fn(batch):
 # ============================================================
 def _make_s3_client():
     """Create a boto3 S3 client using credentials from config.py."""
-    from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+    try:
+        from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+    except Exception:
+        AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+        AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+        AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
     return boto3.client(
         "s3",
         aws_access_key_id=AWS_ACCESS_KEY_ID,
