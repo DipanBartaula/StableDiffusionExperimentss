@@ -284,10 +284,11 @@ def evaluate_loader(
     est_n = len(loader.dataset) if hasattr(loader, "dataset") else 256
     kid_subset = max(2, min(50, int(est_n)))
 
-    fid_p = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=True).to(device) if paired_metrics else None
-    kid_p = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=True, subset_size=kid_subset).to(device) if paired_metrics else None
-    fid_u = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=True).to(device) if unpaired_metrics else None
-    kid_u = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=True, subset_size=kid_subset).to(device) if unpaired_metrics else None
+    # We feed uint8 [0,255] tensors to torchmetrics FID/KID, so normalize must be False.
+    fid_p = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=False).to(device) if paired_metrics else None
+    kid_p = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=False, subset_size=kid_subset).to(device) if paired_metrics else None
+    fid_u = FrechetInceptionDistance(feature=64, reset_real_features=True, normalize=False).to(device) if unpaired_metrics else None
+    kid_u = KernelInceptionDistance(feature=64, reset_real_features=True, normalize=False, subset_size=kid_subset).to(device) if unpaired_metrics else None
 
     lpips_sum = 0.0
     ssim_sum = 0.0
