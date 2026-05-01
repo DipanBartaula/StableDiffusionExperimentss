@@ -64,11 +64,12 @@ def build_curvton_loader(args, dist_info):
         "medium_hard": ("medium", "hard"),
     }
     difficulties = difficulty_map.get(args.difficulty, (args.difficulty,))
+    image_size = IMAGE_SIZE if getattr(args, "image_size", None) is None else args.image_size
     dataset = CombinedCurvtonDataset(
         root_dir=args.curvton_data_path,
         difficulties=difficulties,
         genders=genders,
-        size=IMAGE_SIZE,
+        size=image_size,
     )
     sampler = DistributedSampler(
         dataset,
@@ -129,13 +130,17 @@ def latest_checkpoint(run_dir: str):
     final_ckpt = os.path.join(run_dir, "ckpt_final.pt")
     if os.path.exists(final_ckpt):
         return final_ckpt
-    candidates = glob.glob(os.path.join(run_dir, "ckpt_*.pt"))
+    candidates = glob.glob(os.path.join(run_dir, "ckpt_*.pt")) + glob.glob(
+        os.path.join(run_dir, "ckpt_step_*.pt")
+    )
     if not candidates:
         return None
 
     def _step_num(p):
         base = os.path.basename(p)
         try:
+            if base.startswith("ckpt_step_"):
+                return int(base.split("ckpt_step_")[1].split(".pt")[0])
             return int(base.split("ckpt_")[1].split(".pt")[0])
         except Exception:
             return -1
@@ -171,8 +176,19 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument("--max_steps", type=int, default=12000)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--save_interval", type=int, default=1000)
-    parser.add_argument("--output_dir", type=str, default="runs/cross_architecture")
+    parser.add_argument("--image_log_interval", type=int, default=250)
+    parser.add_argument("--log_interval", type=int, default=10)
+    parser.add_argument("--output_dir", type=str, default="/iopsstor/scratch/cscs/dbartaula/experiments_assets")
     parser.add_argument("--run_name", type=str, default=None)
+    parser.add_argument("--wandb_project", type=str, default="Stable_diffusion")
+    parser.add_argument("--disable_wandb", action="store_true", default=False)
+    parser.add_argument(
+        "--image_size",
+        type=int,
+        default=None,
+        help="Image resize target. Use 0 for full/native resolution. "
+             "If omitted, uses IMAGE_SIZE default.",
+    )
 
 
 class ConvBlock(nn.Module):

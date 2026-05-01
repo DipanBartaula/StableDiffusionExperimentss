@@ -11,34 +11,24 @@ from model import DiT250M, DiTConfig
 from utils import make_beta_schedule, sample_ddim_like
 
 
-def _resolve_model_preset(model_size: str, hidden_size: int, depth: int, num_heads: int):
-    preset = model_size.lower()
-    if preset == "250m":
-        return 1280, 9, 20
-    if preset == "400m":
-        return 1536, 9, 24
-    return hidden_size, depth, num_heads
-
-
 def _build_datapred_model(args):
-    hidden, depth, heads = _resolve_model_preset(args.model_size, args.hidden_size, args.depth, args.num_heads)
     cfg = DiTConfig(
         image_size=args.image_size,
         image_height=args.image_size,
         image_width=args.image_width if args.image_width > 0 else args.image_size * 2,
-        in_channels=6,
+        in_channels=3,
+        cond_in_channels=3,
         out_channels=3,
         patch_size=args.patch_size,
-        hidden_size=hidden,
-        depth=depth,
-        num_heads=heads,
+        hidden_size=args.hidden_size,
+        depth=args.depth,
+        num_heads=args.num_heads,
         mlp_ratio=args.mlp_ratio,
     )
     return DiT250M(cfg)
 
 
 def _build_meanflow_model(args):
-    hidden, depth, heads = _resolve_model_preset(args.model_size, args.hidden_size, args.depth, args.num_heads)
     cfg = MeanFlowDiTConfig(
         image_size=args.image_size,
         image_height=args.image_size,
@@ -46,12 +36,22 @@ def _build_meanflow_model(args):
         in_channels=3,
         out_channels=3,
         patch_size=args.patch_size,
-        hidden_size=hidden,
-        depth=depth,
-        num_heads=heads,
+        hidden_size=args.hidden_size,
+        depth=args.depth,
+        num_heads=args.num_heads,
         mlp_ratio=args.mlp_ratio,
     )
     return MeanFlowDiT250M(cfg)
+
+
+def _resolve_diffusion_steps(args: argparse.Namespace, ckpt: dict | None) -> int:
+    if args.diffusion_steps > 0:
+        return int(args.diffusion_steps)
+    if ckpt is not None:
+        diff_cfg = ckpt.get("diffusion", {})
+        if isinstance(diff_cfg, dict) and int(diff_cfg.get("steps", 0)) > 0:
+            return int(diff_cfg["steps"])
+    raise ValueError("Could not resolve diffusion_steps. Set --diffusion_steps > 0 or use a checkpoint with diffusion.steps metadata.")
 
 
 @torch.no_grad()
@@ -60,11 +60,14 @@ def run_inference(args: argparse.Namespace) -> None:
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
     if args.approach == "datapred":
+        if not args.person_path or not args.cloth_path:
+            raise ValueError("Datapred inference requires both --person_path and --cloth_path.")
         model = _build_datapred_model(args).to(device).eval()
         ckpt = torch.load(args.checkpoint, map_location=device)
         model.load_state_dict(ckpt["model"], strict=False)
+        diffusion_steps = _resolve_diffusion_steps(args, ckpt)
 
-        betas = make_beta_schedule(args.diffusion_steps).to(device)
+        betas = make_beta_schedule(diffusion_steps).to(device)
         alphas = 1.0 - betas
         alpha_bar = torch.cumprod(alphas, dim=0)
         sqrt_ab = torch.sqrt(alpha_bar)
@@ -78,17 +81,14 @@ def run_inference(args: argparse.Namespace) -> None:
         sample_wide = sample_ddim_like(
             model=model,
             shape=shape,
-            timesteps=args.diffusion_steps,
+            timesteps=diffusion_steps,
             sqrt_ab=sqrt_ab,
             sqrt_1mab=sqrt_1mab,
             device=device,
-            cond=(
-                torch.cat([
-                    _load_rgb(args.person_path, args.image_size, args.image_size).unsqueeze(0).to(device),
-                    _load_rgb(args.cloth_path, args.image_size, args.image_size).unsqueeze(0).to(device),
-                ], dim=3).repeat(args.batch_size, 1, 1, 1)
-                if args.person_path and args.cloth_path else None
-            ),
+            cond=torch.cat([
+                _load_rgb(args.person_path, args.image_size, args.image_size).unsqueeze(0).to(device),
+                _load_rgb(args.cloth_path, args.image_size, args.image_size).unsqueeze(0).to(device),
+            ], dim=3).repeat(args.batch_size, 1, 1, 1),
         )
     else:
         model = _build_meanflow_model(args).to(device).eval()
@@ -112,18 +112,18 @@ def run_inference(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser("Inference for custom DiT variants (datapred / meanflow)")
     p.add_argument("--approach", type=str, required=True, choices=["datapred", "meanflow"])
-    p.add_argument("--model_size", type=str, default="400m", choices=["250m", "400m", "custom"])
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--output", type=str, required=True)
     p.add_argument("--batch_size", type=int, default=4)
     p.add_argument("--image_size", type=int, default=64)
     p.add_argument("--image_width", type=int, default=-1)
     p.add_argument("--patch_size", type=int, default=2)
-    p.add_argument("--hidden_size", type=int, default=1536)
+    p.add_argument("--hidden_size", type=int, default=1280)
     p.add_argument("--depth", type=int, default=9)
-    p.add_argument("--num_heads", type=int, default=24)
+    p.add_argument("--num_heads", type=int, default=20)
     p.add_argument("--mlp_ratio", type=float, default=4.0)
-    p.add_argument("--diffusion_steps", type=int, default=50)
+    p.add_argument("--diffusion_steps", type=int, default=-1,
+                   help=">0 overrides schedule steps. <=0 uses checkpoint diffusion.steps for datapred.")
     p.add_argument("--time_embed_scale", type=float, default=1000.0)
     p.add_argument("--person_path", type=str, default=None)
     p.add_argument("--cloth_path", type=str, default=None)

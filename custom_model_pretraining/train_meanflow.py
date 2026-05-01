@@ -73,20 +73,6 @@ def _to_wandb_image(batch: torch.Tensor, caption: str):
     return wandb.Image(grid, caption=caption)
 
 
-def _resolve_model_preset(args: argparse.Namespace) -> Tuple[int, int, int]:
-    """
-    Returns (hidden_size, depth, num_heads) based on requested model size preset.
-    """
-    preset = args.model_size.lower()
-    if preset == "250m":
-        # Practical ~250M regime for this DiT codepath.
-        return 1280, 9, 20
-    if preset == "400m":
-        # Practical ~400M regime (close to current default architecture).
-        return 1536, 9, 24
-    return args.hidden_size, args.depth, args.num_heads
-
-
 def _catvton_wide_tensors(batch: dict, device: torch.device):
     gt = batch["ground_truth"].to(device, non_blocking=True)
     cloth = batch["cloth"].to(device, non_blocking=True)
@@ -137,16 +123,15 @@ def train(args: argparse.Namespace) -> None:
 
     image_height = args.image_size
     image_width = args.image_width if args.image_width > 0 else image_height * 2
-    hidden_size, depth, num_heads = _resolve_model_preset(args)
     cfg = MeanFlowDiTConfig(
         image_size=args.image_size,
         image_height=image_height,
         image_width=image_width,
         in_channels=3,
         patch_size=args.patch_size,
-        hidden_size=hidden_size,
-        depth=depth,
-        num_heads=num_heads,
+        hidden_size=args.hidden_size,
+        depth=args.depth,
+        num_heads=args.num_heads,
         mlp_ratio=args.mlp_ratio,
     )
     model = MeanFlowDiT250M(cfg).to(device)
@@ -157,7 +142,7 @@ def train(args: argparse.Namespace) -> None:
     if is_main:
         params_m = count_parameters(raw_model) / 1e6
         print(
-            f"Resolved model preset={args.model_size} hidden={hidden_size} depth={depth} heads={num_heads}"
+            f"Resolved MeanFlow custom DiT 250M hidden={args.hidden_size} depth={args.depth} heads={args.num_heads}"
         )
         print(f"MeanFlow DiT params: {params_m:.2f}M")
 
@@ -352,7 +337,6 @@ def train(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser("Custom 250M DiT MeanFlow-style pretraining")
-    p.add_argument("--model_size", type=str, default="400m", choices=["250m", "400m", "custom"])
     p.add_argument("--run_name", type=str, default="custom_dit_meanflow_pretrain")
     p.add_argument("--data_path", type=str, required=True, help="CurvTon root containing easy/medium/hard")
     p.add_argument("--phase2_data_path", type=str, default=None, help="Optional final-stage dataset path")
@@ -367,9 +351,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--image_size", type=int, default=64)
     p.add_argument("--patch_size", type=int, default=2)
-    p.add_argument("--hidden_size", type=int, default=1536)
+    p.add_argument("--hidden_size", type=int, default=1280)
     p.add_argument("--depth", type=int, default=9)
-    p.add_argument("--num_heads", type=int, default=24)
+    p.add_argument("--num_heads", type=int, default=20)
     p.add_argument("--mlp_ratio", type=float, default=4.0)
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--image_width", type=int, default=-1, help="Target width; <=0 means 2x image_size (CATVTON concat).")

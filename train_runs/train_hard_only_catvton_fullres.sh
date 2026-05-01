@@ -31,5 +31,5 @@ export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 
 srun torchrun --nnodes=1 --nproc_per_node=4 --standalone --master_port=$MASTER_PORT \
-  train.py --dataset curvton --difficulty hard --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 8 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 1000 --use_dream --dream_lambda 10.0 --skip_eval --no_resume --run_name Stable_diffusion_train_hard_only_catvton_fullres
+  train.py --dataset curvton --difficulty hard --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 6 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 500 --use_dream --dream_lambda 10.0 --skip_eval --no_resume --run_name Stable_diffusion_train_hard_only_catvton_fullres
 

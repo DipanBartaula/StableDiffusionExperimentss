@@ -50,14 +50,25 @@ def _load_cfg(ckpt_cfg: dict) -> DiTConfig:
         image_size=ckpt_cfg.get("image_size", 64),
         image_height=ckpt_cfg.get("image_height", ckpt_cfg.get("image_size", 64)),
         image_width=ckpt_cfg.get("image_width", ckpt_cfg.get("image_size", 64) * 2),
-        in_channels=ckpt_cfg.get("in_channels", 6),
+        in_channels=ckpt_cfg.get("in_channels", 3),
+        cond_in_channels=ckpt_cfg.get("cond_in_channels", 3),
         out_channels=ckpt_cfg.get("out_channels", 3),
         patch_size=ckpt_cfg.get("patch_size", 2),
-        hidden_size=ckpt_cfg.get("hidden_size", 1536),
+        hidden_size=ckpt_cfg.get("hidden_size", 1280),
         depth=ckpt_cfg.get("depth", 9),
-        num_heads=ckpt_cfg.get("num_heads", 24),
+        num_heads=ckpt_cfg.get("num_heads", 20),
         mlp_ratio=ckpt_cfg.get("mlp_ratio", 4.0),
     )
+
+
+def _resolve_diffusion_steps(args: argparse.Namespace, ckpt: dict | None) -> int:
+    if args.diffusion_steps > 0:
+        return int(args.diffusion_steps)
+    if ckpt is not None:
+        diff_cfg = ckpt.get("diffusion", {})
+        if isinstance(diff_cfg, dict) and int(diff_cfg.get("steps", 0)) > 0:
+            return int(diff_cfg["steps"])
+    raise ValueError("Could not resolve diffusion_steps. Set --diffusion_steps > 0 or use a checkpoint with diffusion.steps metadata.")
 
 
 def build_predict_fn(model, diffusion_steps: int, sqrt_ab: torch.Tensor, sqrt_1mab: torch.Tensor):
@@ -109,7 +120,8 @@ def main(args):
         print("Using initial custom DiT weights (no checkpoint load).")
     print(f"Weights used: {weight_source}")
 
-    betas = make_beta_schedule(args.diffusion_steps).to(device)
+    diffusion_steps = _resolve_diffusion_steps(args, ckpt)
+    betas = make_beta_schedule(diffusion_steps).to(device)
     alphas = 1.0 - betas
     alpha_bar = torch.cumprod(alphas, dim=0)
     sqrt_ab = torch.sqrt(alpha_bar)
@@ -127,9 +139,10 @@ def main(args):
         gender=args.gender,
         street_split=args.street_split,
     )
+    print(f"- diffusion_steps: {diffusion_steps}")
     results = evaluate_all_splits(
         loaders=loaders,
-        predict_fn=build_predict_fn(model, args.diffusion_steps, sqrt_ab, sqrt_1mab),
+        predict_fn=build_predict_fn(model, diffusion_steps, sqrt_ab, sqrt_1mab),
         device=device,
         max_batches=args.max_batches,
         eval_frac_curvton=args.eval_frac_curvton,
@@ -152,7 +165,8 @@ if __name__ == "__main__":
     p.add_argument("--street_split", type=str, default="validation", choices=["train", "validation"])
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--num_workers", type=int, default=8)
-    p.add_argument("--diffusion_steps", type=int, default=100)
+    p.add_argument("--diffusion_steps", type=int, default=-1,
+                   help=">0 overrides schedule steps. <=0 uses checkpoint diffusion.steps.")
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
     p.add_argument("--eval_frac_curvton", type=float, default=0.02)

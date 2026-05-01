@@ -77,20 +77,6 @@ def _to_wandb_image(batch: torch.Tensor, caption: str):
     return wandb.Image(grid, caption=caption)
 
 
-def _resolve_model_preset(args: argparse.Namespace) -> tuple[int, int, int]:
-    """
-    Returns (hidden_size, depth, num_heads) based on requested model size preset.
-    """
-    preset = args.model_size.lower()
-    if preset == "250m":
-        # Practical ~250M regime for this DiT codepath.
-        return 1280, 9, 20
-    if preset == "400m":
-        # Practical ~400M regime (close to current default architecture).
-        return 1536, 9, 24
-    return args.hidden_size, args.depth, args.num_heads
-
-
 def _catvton_wide_tensors(batch: dict, device: torch.device):
     gt = batch["ground_truth"].to(device, non_blocking=True)
     cloth = batch["cloth"].to(device, non_blocking=True)
@@ -107,17 +93,17 @@ def train(args: argparse.Namespace) -> None:
 
     image_height = args.image_size
     image_width = args.image_width if args.image_width > 0 else image_height * 2
-    hidden_size, depth, num_heads = _resolve_model_preset(args)
     cfg = DiTConfig(
         image_size=args.image_size,
         image_height=image_height,
         image_width=image_width,
-        in_channels=6,
+        in_channels=3,
+        cond_in_channels=3,
         out_channels=3,
         patch_size=args.patch_size,
-        hidden_size=hidden_size,
-        depth=depth,
-        num_heads=num_heads,
+        hidden_size=args.hidden_size,
+        depth=args.depth,
+        num_heads=args.num_heads,
         mlp_ratio=args.mlp_ratio,
     )
     model = DiT250M(cfg).to(device)
@@ -128,7 +114,7 @@ def train(args: argparse.Namespace) -> None:
     if is_main:
         params_m = count_parameters(raw_model) / 1e6
         print(
-            f"Resolved model preset={args.model_size} hidden={hidden_size} depth={depth} heads={num_heads}"
+            f"Resolved custom DiT 250M hidden={args.hidden_size} depth={args.depth} heads={args.num_heads}"
         )
         print(f"DiT params: {params_m:.2f}M")
 
@@ -137,12 +123,18 @@ def train(args: argparse.Namespace) -> None:
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     scaler = GradScaler(enabled=(device.type == "cuda"))
 
-    betas = make_beta_schedule(args.diffusion_steps).to(device)
+    schedule_cfg = {
+        "steps": int(args.diffusion_steps),
+        "beta_schedule": "linear",
+        "beta_start": 1e-4,
+        "beta_end": 0.02,
+    }
+    betas = make_beta_schedule(schedule_cfg["steps"]).to(device)
     alphas = 1.0 - betas
     alpha_bar = torch.cumprod(alphas, dim=0)
     sqrt_ab = torch.sqrt(alpha_bar)
     sqrt_1mab = torch.sqrt(1 - alpha_bar)
-    timestep_weights = make_cosine_timestep_weights(args.diffusion_steps, device)
+    timestep_weights = make_cosine_timestep_weights(schedule_cfg["steps"], device)
 
     diff_files = build_curvton_difficulty_files(args.data_path, gender=args.gender)
     for k in diff_files:
@@ -249,10 +241,8 @@ def train(args: argparse.Namespace) -> None:
 
         t = torch.multinomial(timestep_weights, x0.shape[0], replacement=True)
         x_t, _ = q_sample(x0, t, sqrt_ab, sqrt_1mab)
-        model_in = torch.cat([x_t, cond_vis], dim=1)
-
         with autocast(enabled=(device.type == "cuda")):
-            x0_pred = model(model_in, t)
+            x0_pred = model(x_t, t, cond_vis)
             loss = F.mse_loss(x0_pred, x0)
         optimizer.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
@@ -296,14 +286,30 @@ def train(args: argparse.Namespace) -> None:
                 wb_run.log(log_payload, step=global_step)
         if is_main and global_step > 0 and global_step % args.save_interval == 0:
             to_save = raw_model.state_dict() if world_size == 1 else model.module.state_dict()
-            torch.save({"step": global_step, "model": to_save, "cfg": cfg.__dict__}, os.path.join(ckpt_dir, f"ckpt_step_{global_step}.pt"))
+            torch.save(
+                {
+                    "step": global_step,
+                    "model": to_save,
+                    "cfg": cfg.__dict__,
+                    "diffusion": schedule_cfg,
+                },
+                os.path.join(ckpt_dir, f"ckpt_step_{global_step}.pt"),
+            )
 
         global_step += 1
         pbar.update(1)
 
     if is_main:
         to_save = raw_model.state_dict() if world_size == 1 else model.module.state_dict()
-        torch.save({"step": global_step, "model": to_save, "cfg": cfg.__dict__}, os.path.join(ckpt_dir, "ckpt_final.pt"))
+        torch.save(
+            {
+                "step": global_step,
+                "model": to_save,
+                "cfg": cfg.__dict__,
+                "diffusion": schedule_cfg,
+            },
+            os.path.join(ckpt_dir, "ckpt_final.pt"),
+        )
         if wb_run is not None:
             wb_run.finish()
     if world_size > 1:
@@ -312,7 +318,6 @@ def train(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser("Custom 250M DiT pretraining (x0-prediction)")
-    p.add_argument("--model_size", type=str, default="400m", choices=["250m", "400m", "custom"])
     p.add_argument("--run_name", type=str, default="custom_dit_pretrain")
     p.add_argument("--data_path", type=str, required=True, help="CurvTon root containing easy/medium/hard")
     p.add_argument("--phase2_data_path", type=str, default=None, help="Optional final-stage dataset path")
@@ -327,9 +332,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--image_size", type=int, default=64)
     p.add_argument("--patch_size", type=int, default=2)
-    p.add_argument("--hidden_size", type=int, default=1536)
+    p.add_argument("--hidden_size", type=int, default=1280)
     p.add_argument("--depth", type=int, default=9)
-    p.add_argument("--num_heads", type=int, default=24)
+    p.add_argument("--num_heads", type=int, default=20)
     p.add_argument("--mlp_ratio", type=float, default=4.0)
     p.add_argument("--diffusion_steps", type=int, default=1000)
     p.add_argument("--inference_steps", type=int, default=50)

@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim import AdamW
+from torchvision.utils import make_grid
 
 from common import (
     add_common_args,
@@ -34,9 +35,33 @@ from common import (
     wrap_ddp,
 )
 
+try:
+    import wandb  # type: ignore
+except Exception:
+    wandb = None
+
 
 def raw_module(module):
     return module.module if hasattr(module, "module") else module
+
+
+def _maybe_init_wandb(args, is_main):
+    if not is_main or args.disable_wandb or os.environ.get("DISABLE_WANDB", "0") == "1":
+        return None
+    if wandb is None:
+        return None
+    try:
+        return wandb.init(project=args.wandb_project, name=args.run_name, config=vars(args))
+    except Exception:
+        return None
+
+
+def _to_wandb_image(batch: torch.Tensor, caption: str):
+    if wandb is None:
+        return None
+    vis = (batch.clamp(-1, 1) + 1.0) * 0.5
+    grid = make_grid(vis, nrow=min(4, vis.shape[0]))
+    return wandb.Image(grid, caption=caption)
 
 
 class OOTDiffusionModel(nn.Module):
@@ -83,6 +108,7 @@ def train(args):
     params = list(model.denoising_unet.parameters()) + list(model.outfitting_unet.parameters()) + list(model.outfit_adapter.parameters())
     optimizer = AdamW(params, lr=args.lr)
     scaler = GradScaler(enabled=(dist_info.device.type == "cuda"))
+    wb_run = _maybe_init_wandb(args, dist_info.is_main)
 
     run_dir = os.path.join(args.output_dir, args.run_name)
     os.makedirs(run_dir, exist_ok=True)
@@ -128,6 +154,22 @@ def train(args):
             scaler.update()
 
             step += 1
+            if dist_info.is_main and step % args.log_interval == 0:
+                print(f"[step {step:>6}/{args.max_steps}] loss={loss.item():.6f}", flush=True)
+            if dist_info.is_main and wb_run is not None:
+                wb_run.log({"train/loss": float(loss.item()), "train/step": step}, step=step)
+            if dist_info.is_main and wb_run is not None and step % args.image_log_interval == 0:
+                with torch.no_grad():
+                    pred_x0 = model.scheduler.step(pred, timesteps, noisy).pred_original_sample
+                    pred_img = model.vae.decode(pred_x0 / model.vae.config.scaling_factor).sample
+                payload = {
+                    "train/step": step,
+                    "images/pred_tryon": _to_wandb_image(pred_img[:8].detach().cpu(), f"OOT pred step {step}"),
+                    "images/gt_tryon": _to_wandb_image(gt[:8].detach().cpu(), f"OOT gt step {step}"),
+                    "images/person": _to_wandb_image(person[:8].detach().cpu(), f"OOT person step {step}"),
+                    "images/cloth": _to_wandb_image(cloth[:8].detach().cpu(), f"OOT cloth step {step}"),
+                }
+                wb_run.log({k: v for k, v in payload.items() if v is not None}, step=step)
             if dist_info.is_main and step % args.save_interval == 0:
                 os.makedirs(os.path.join(args.output_dir, args.run_name), exist_ok=True)
                 torch.save({
@@ -137,7 +179,9 @@ def train(args):
                     "outfitting_unet_state_dict": raw_module(model.outfitting_unet).state_dict(),
                     "outfit_adapter_state_dict": model.outfit_adapter.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                }, os.path.join(args.output_dir, args.run_name, f"ckpt_{step}.pt"))
+                    "scaler_state_dict": scaler.state_dict(),
+                    "args": vars(args),
+                }, os.path.join(args.output_dir, args.run_name, f"ckpt_step_{step}.pt"))
             if step >= args.max_steps:
                 break
 
@@ -150,7 +194,11 @@ def train(args):
             "outfitting_unet_state_dict": raw_module(model.outfitting_unet).state_dict(),
             "outfit_adapter_state_dict": model.outfit_adapter.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "args": vars(args),
         }, os.path.join(args.output_dir, args.run_name, "ckpt_final.pt"))
+        if wb_run is not None:
+            wb_run.finish()
     cleanup_dist()
 
 

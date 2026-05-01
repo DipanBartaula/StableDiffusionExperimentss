@@ -67,7 +67,8 @@ srun torchrun \
   --master_port=$MASTER_PORT \
   cross-architecture/OOTDiffusion/train_ootdiffusion_local.py \
   --curvton_data_path "${DATA_DIR}" \
-  --batch_size 8 \
+  --batch_size 6 \
+  --image_size 0 \
   --num_workers 16 \
   --max_steps 28000 \
   --save_interval 1000 \

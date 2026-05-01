@@ -57,5 +57,5 @@ srun torchrun \
   --nproc_per_node=4 \
   --standalone \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 8 --num_workers 16 --gender all --image_size 0 --train_mode full_unet --use_dream --dream_lambda 10.0 --use_attention_score_regularization --attn_score_reg_lambda 1e-4 --save_interval 1000 --image_log_interval 1000 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres_dream_reg
+  train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 6 --num_workers 16 --gender all --image_size 0 --train_mode full_unet --use_dream --dream_lambda 10.0 --use_attention_score_regularization --attn_score_reg_lambda 1e-4 --save_interval 1000 --image_log_interval 500 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres_dream_reg
 

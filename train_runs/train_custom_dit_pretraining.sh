@@ -71,7 +71,7 @@ srun torchrun \
   --num_workers 16 \
   --gender all \
   --save_interval 1000 \
-  --image_log_interval 1000 \
+  --image_log_interval 500 \
   --no_resume \
   --run_name Stable_diffusion_train_custom_dit_soft_12000steps
 

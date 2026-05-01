@@ -51,7 +51,7 @@ srun torchrun \
     --batch_size 16 \
     --num_workers 16 \
     --save_interval 1000 \
-    --image_log_interval 1000 \
+    --image_log_interval 500 \
     --inference_steps 50 \
     --gender all \
     --run_name Stable_diffusion_train_custom_dit_datapred_400m_30000steps \

@@ -85,8 +85,7 @@ def sample_ddim_like(
     x = torch.randn(shape, device=device)
     for step in reversed(range(timesteps)):
         t = torch.full((shape[0],), step, device=device, dtype=torch.long)
-        model_in = torch.cat([x, cond], dim=1) if cond is not None else x
-        x0_pred = model(model_in, t).clamp(-1, 1)
+        x0_pred = model(x, t, cond).clamp(-1, 1)
         if step == 0:
             x = x0_pred
             break

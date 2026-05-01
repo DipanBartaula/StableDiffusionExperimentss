@@ -37,6 +37,16 @@ def _log_and_validate_components(model, approach: str) -> None:
     print(f"- backbone: loaded ({type(model).__name__})")
 
 
+def _resolve_diffusion_steps(args: argparse.Namespace, ckpt: dict | None) -> int:
+    if args.diffusion_steps > 0:
+        return int(args.diffusion_steps)
+    if ckpt is not None:
+        diff_cfg = ckpt.get("diffusion", {})
+        if isinstance(diff_cfg, dict) and int(diff_cfg.get("steps", 0)) > 0:
+            return int(diff_cfg["steps"])
+    raise ValueError("Could not resolve diffusion_steps. Set --diffusion_steps > 0 or use a checkpoint with diffusion.steps metadata.")
+
+
 def _to_01(x: torch.Tensor) -> torch.Tensor:
     if x.min() < -0.01 or x.max() > 1.01:
         x = (x + 1.0) * 0.5
@@ -113,7 +123,7 @@ def _build_predict_fn(args, model):
             pred = sample_ddim_like(
                 model=model,
                 shape=(bs, 3, h, w),
-                timesteps=args.diffusion_steps,
+                timesteps=args._resolved_diffusion_steps,
                 sqrt_ab=sqrt_ab,
                 sqrt_1mab=sqrt_1mab,
                 device=device,
@@ -138,6 +148,7 @@ def main(args: argparse.Namespace) -> None:
         model = _build_meanflow_model(args).to(device).eval()
     _log_and_validate_components(model, args.approach)
 
+    ckpt = None
     if args.use_init_weights:
         print("Using initial custom DiT weights (no checkpoint load).")
     elif args.checkpoint:
@@ -148,6 +159,7 @@ def main(args: argparse.Namespace) -> None:
     else:
         print("Using init weights for evaluation.")
     print(f"Weights used: {weight_source}")
+    args._resolved_diffusion_steps = _resolve_diffusion_steps(args, ckpt) if args.approach == "datapred" else args.diffusion_steps
 
     loaders = build_eval_loaders(
         curvton_test_data_path=args.curvton_test_data_path,
@@ -197,7 +209,7 @@ def main(args: argparse.Namespace) -> None:
             cloth = batch["cloth"].to(device)
             person = batch["person"].to(device)
             cond = torch.cat([person, cloth], dim=3)
-            betas = make_beta_schedule(args.diffusion_steps).to(device)
+            betas = make_beta_schedule(args._resolved_diffusion_steps).to(device)
             alphas = 1.0 - betas
             alpha_bar = torch.cumprod(alphas, dim=0)
             sqrt_ab = torch.sqrt(alpha_bar)
@@ -205,7 +217,7 @@ def main(args: argparse.Namespace) -> None:
             pred = sample_ddim_like(
                 model=model,
                 shape=(bs, 3, h, w),
-                timesteps=args.diffusion_steps,
+                timesteps=args._resolved_diffusion_steps,
                 sqrt_ab=sqrt_ab,
                 sqrt_1mab=sqrt_1mab,
                 device=device,
@@ -241,7 +253,6 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Evaluate custom DiT variants with FID/KID only")
     p.add_argument("--approach", type=str, required=True, choices=["datapred", "meanflow"])
-    p.add_argument("--model_size", type=str, default="400m", choices=["250m", "400m", "custom"])
     p.add_argument("--checkpoint", type=str, default=None)
     p.add_argument("--curvton_test_data_path", type=str, default=CURVTON_TEST_PATH)
     p.add_argument("--triplet_test_data_path", type=str, default=TRIPLET_TEST_PATH)
@@ -253,11 +264,12 @@ if __name__ == "__main__":
     p.add_argument("--image_size", type=int, default=64)
     p.add_argument("--image_width", type=int, default=-1)
     p.add_argument("--patch_size", type=int, default=2)
-    p.add_argument("--hidden_size", type=int, default=1536)
+    p.add_argument("--hidden_size", type=int, default=1280)
     p.add_argument("--depth", type=int, default=9)
-    p.add_argument("--num_heads", type=int, default=24)
+    p.add_argument("--num_heads", type=int, default=20)
     p.add_argument("--mlp_ratio", type=float, default=4.0)
-    p.add_argument("--diffusion_steps", type=int, default=50)
+    p.add_argument("--diffusion_steps", type=int, default=-1,
+                   help=">0 overrides schedule steps. <=0 uses checkpoint diffusion.steps for datapred.")
     p.add_argument("--time_embed_scale", type=float, default=1000.0)
     p.add_argument("--max_batches", type=int, default=0)
     p.add_argument("--eval_frac_curvton", type=float, default=0.02)

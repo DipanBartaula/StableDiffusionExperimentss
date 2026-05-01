@@ -100,6 +100,12 @@ def main(args):
     elif args.checkpoint:
         ckpt = torch.load(args.checkpoint, map_location="cpu")
         model.unet.load_state_dict(_clean_state_dict(ckpt["model_state_dict"]), strict=False)
+        if "sd_encoder_copy_state_dict" in ckpt:
+            model.sd_encoder_copy.load_state_dict(_clean_state_dict(ckpt["sd_encoder_copy_state_dict"]), strict=False)
+        if "garment_token_proj_state_dict" in ckpt:
+            model.garment_token_proj.load_state_dict(_clean_state_dict(ckpt["garment_token_proj_state_dict"]), strict=False)
+        if "zero_cross_linear_state_dict" in ckpt:
+            model.zero_cross_linear.load_state_dict(_clean_state_dict(ckpt["zero_cross_linear_state_dict"]), strict=False)
         weight_source = f"checkpoint={args.checkpoint}"
         print(f"Loaded checkpoint: {args.checkpoint}")
     else:
