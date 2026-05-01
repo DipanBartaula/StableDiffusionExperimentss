@@ -82,6 +82,7 @@ class DiTConfig:
     image_height: Optional[int] = None
     image_width: Optional[int] = None
     in_channels: int = 3
+    out_channels: Optional[int] = None
     patch_size: int = 2
     hidden_size: int = 1536
     depth: int = 9
@@ -105,6 +106,7 @@ class DiT250M(nn.Module):
         self.grid_w = self.image_width // cfg.patch_size
         self.num_tokens = self.grid_h * self.grid_w
         self.patch_dim = cfg.patch_size * cfg.patch_size * cfg.in_channels
+        self.out_channels = cfg.out_channels if cfg.out_channels is not None else cfg.in_channels
 
         self.patch_embed = nn.Conv2d(
             cfg.in_channels, cfg.hidden_size, kernel_size=cfg.patch_size, stride=cfg.patch_size
@@ -118,7 +120,7 @@ class DiT250M(nn.Module):
         self.blocks = nn.ModuleList(
             [DiTBlock(cfg.hidden_size, cfg.num_heads, cfg.mlp_ratio) for _ in range(cfg.depth)]
         )
-        self.final = FinalLayer(cfg.hidden_size, cfg.patch_size, cfg.in_channels)
+        self.final = FinalLayer(cfg.hidden_size, cfg.patch_size, self.out_channels)
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -129,7 +131,7 @@ class DiT250M(nn.Module):
     def unpatchify(self, x: torch.Tensor) -> torch.Tensor:
         b = x.shape[0]
         p = self.cfg.patch_size
-        c = self.cfg.in_channels
+        c = self.out_channels
         h, w = self.grid_h, self.grid_w
         x = x.view(b, h, w, p, p, c)
         x = x.permute(0, 5, 1, 3, 2, 4).contiguous()

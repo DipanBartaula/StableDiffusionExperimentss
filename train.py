@@ -51,7 +51,7 @@ try:
 except Exception:
     weave = None
 
-from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, MODEL_NAME, IMAGE_SIZE
+from config import WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY, MODEL_NAME, IMAGE_SIZE as CFG_IMAGE_SIZE
 from model import SDModel, freeze_non_attention, print_trainable_params
 from utils import (
     VitonHDDataset,
@@ -71,11 +71,48 @@ from utils import (
     subsample_dataset as _subsample_dataset,
 )
 
+class _AttentionActivationRegularizer:
+    """Collects attention-module output magnitudes as a proxy for attention intensity."""
+
+    def __init__(self, unet, include_self=True, include_cross=True):
+        self._handles = []
+        self._vals = []
+        for name, module in unet.named_modules():
+            if not hasattr(module, "to_q"):
+                continue
+            is_self = ".attn1" in name
+            is_cross = ".attn2" in name
+            if (is_self and not include_self) or (is_cross and not include_cross):
+                continue
+            if not (is_self or is_cross):
+                continue
+            self._handles.append(module.register_forward_hook(self._hook))
+
+    def _hook(self, module, inp, out):
+        if torch.is_tensor(out):
+            self._vals.append(out.float().pow(2).mean())
+        elif isinstance(out, (tuple, list)) and len(out) > 0 and torch.is_tensor(out[0]):
+            self._vals.append(out[0].float().pow(2).mean())
+
+    def clear(self):
+        self._vals.clear()
+
+    def penalty(self, device):
+        if not self._vals:
+            return torch.zeros((), device=device)
+        return torch.stack(self._vals).mean()
+
+    def close(self):
+        for h in self._handles:
+            h.remove()
+        self._handles.clear()
+
 
 # ============================================================
 # MAIN TRAINING
 # ============================================================
 def train(args):
+    image_size = args.image_size
     # ── Distributed Data Parallel setup ────────────────────────
     rank       = int(os.environ.get("RANK",       0))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
@@ -106,6 +143,15 @@ def train(args):
         print(f"Device: {device}  |  rank={rank}/{world_size}")
         if args.use_dream:
             print(f"[DREAM] Enabled with lambda={args.dream_lambda}")
+        if args.use_attention_regularization:
+            print(
+                f"[ATTN-REG] Enabled with lambda={args.attn_reg_lambda}, "
+                f"threshold={args.attn_reg_threshold}"
+            )
+        if args.image_size <= 0:
+            print("[INFO] image_size<=0: no resize mode enabled (uses native dataset resolution).")
+        else:
+            print(f"[INFO] image_size={args.image_size}")
 
     def _wandb_log(payload, step=None):
         if is_main and wandb_enabled:
@@ -143,6 +189,14 @@ def train(args):
         _mode_tag = "attn"
     else:
         _mode_tag = "full"
+
+    attn_score_reg = None
+    if args.use_attention_score_regularization:
+        attn_score_reg = _AttentionActivationRegularizer(
+            model.unet,
+            include_self=True,
+            include_cross=True,
+        )
 
     _frac_tag   = f"_frac{int(args.data_fraction * 100)}pct" if args.data_fraction < 1.0 else ""
     _phase2_tag = "_phase2" if getattr(args, 'phase2_data_path', None) else ""
@@ -195,7 +249,7 @@ def train(args):
                 root_dir=args.curvton_data_path,
                 difficulties=(_diff,),
                 genders=genders,
-                size=IMAGE_SIZE,
+                size=image_size,
             )
             _ds = _subsample_dataset(_ds, args.data_fraction)
             _samp = (DistributedSampler(_ds, num_replicas=world_size, rank=rank,
@@ -228,7 +282,7 @@ def train(args):
             root_dir=args.curvton_data_path,
             difficulties=difficulties,
             genders=genders,
-            size=IMAGE_SIZE,
+            size=image_size,
         )
         train_dataset = _subsample_dataset(train_dataset, args.data_fraction)
         _frac_tag = f"_frac{args.data_fraction}" if args.data_fraction < 1.0 else ""
@@ -237,7 +291,7 @@ def train(args):
         train_dataset = VitonHDDataset(
             root_dir=args.viton_data_path,
             split='train',
-            size=IMAGE_SIZE,
+            size=image_size,
         )
         train_dataset = _subsample_dataset(train_dataset, args.data_fraction)
         _frac_tag = f"_frac{args.data_fraction}" if args.data_fraction < 1.0 else ""
@@ -286,7 +340,7 @@ def train(args):
                 root_dir=args.phase2_data_path,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                size=IMAGE_SIZE,
+                size=image_size,
                 world_size=world_size,
                 rank=rank,
             )
@@ -310,7 +364,7 @@ def train(args):
                 root_dir=args.curvton_test_data_path,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                size=IMAGE_SIZE,
+                size=image_size,
                 genders=genders_test,
             )
             # prefix curvton splits; skip 'all' since it duplicates easy+medium+hard
@@ -327,7 +381,7 @@ def train(args):
                 root_dir=args.triplet_test_data_path,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                size=IMAGE_SIZE,
+                size=image_size,
             )
             test_loaders.update(triplet_test)
             print(f"✓ Triplet test loaders: {list(triplet_test.keys())}")
@@ -591,7 +645,9 @@ def train(args):
             try:
                 gt         = batch['ground_truth'].to(device, non_blocking=True)
                 cloth      = batch['cloth'].to(device, non_blocking=True)
-                person_img = batch.get('person', batch.get('masked_person')).to(device, non_blocking=True)
+                if "person" not in batch:
+                    raise KeyError("Expected 'person' (initial person image) in batch.")
+                person_img = batch["person"].to(device, non_blocking=True)
 
                 # Fused VAE encode: batch cond + target into a single forward pass
                 with torch.no_grad(), autocast():
@@ -635,8 +691,39 @@ def train(args):
                 # Forward
                 optimizer.zero_grad(set_to_none=True)
                 with autocast():
+                    if attn_score_reg is not None:
+                        attn_score_reg.clear()
                     noise_pred = model.unet(unet_input, timesteps, text_emb).sample
-                    loss = F.mse_loss(noise_pred, noise)
+                    loss_diff = F.mse_loss(noise_pred, noise)
+                    loss_attn_reg = torch.zeros((), device=device, dtype=loss_diff.dtype)
+                    loss_attn_score_reg = torch.zeros((), device=device, dtype=loss_diff.dtype)
+
+                    if args.use_attention_regularization:
+                        if model.scheduler.config.prediction_type != "epsilon":
+                            raise ValueError("Attention regularization currently requires epsilon prediction_type.")
+
+                        alpha_bar_t = model.scheduler.alphas_cumprod.to(
+                            device=timesteps.device, dtype=noisy_latents.dtype
+                        )[timesteps].view(-1, 1, 1, 1)
+                        x0_pred = (noisy_latents - (1.0 - alpha_bar_t).sqrt() * noise_pred) / alpha_bar_t.sqrt()
+
+                        # Heuristic change map from |GT - person| in pixel space.
+                        # We regularize latent reconstruction outside changed regions.
+                        change_map = (gt - person_img).abs().mean(dim=1, keepdim=True)
+                        change_mask = (change_map > args.attn_reg_threshold).float()
+                        bg_mask = 1.0 - change_mask
+                        bg_mask_latent = F.interpolate(bg_mask, size=x0_pred.shape[-2:], mode="nearest")
+                        bg_denom = bg_mask_latent.sum().clamp_min(1.0)
+                        loss_attn_reg = ((x0_pred - target_latents) ** 2 * bg_mask_latent).sum() / bg_denom
+
+                    if attn_score_reg is not None:
+                        loss_attn_score_reg = attn_score_reg.penalty(device).to(loss_diff.dtype)
+
+                    loss = (
+                        loss_diff
+                        + args.attn_reg_lambda * loss_attn_reg
+                        + args.attn_score_reg_lambda * loss_attn_score_reg
+                    )
 
                 # Backward
                 scaler.scale(loss).backward()
@@ -674,6 +761,9 @@ def train(args):
                 epoch_losses.append(loss_val)
                 if is_main: _wandb_log({
                     "train/loss":              loss_val,
+                    "train/loss_diff":         loss_diff.item(),
+                    "train/loss_attn_reg":     loss_attn_reg.item(),
+                    "train/loss_attn_score_reg": loss_attn_score_reg.item(),
                     "train/loss_ema":          ema_loss,
                     "train/loss_mean":         loss_mean,
                     "train/loss_var":          loss_var,
@@ -813,6 +903,9 @@ def train(args):
     if is_main and wandb_enabled:
         wandb.finish()
 
+    if attn_score_reg is not None:
+        attn_score_reg.close()
+
     if world_size > 1:
         dist.destroy_process_group()
 
@@ -846,6 +939,12 @@ if __name__ == "__main__":
     # ── Common ───────────────────────────────────────────────────────
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--num_workers", type=int, default=32, help="Number of DataLoader workers")
+    parser.add_argument(
+        "--image_size",
+        type=int,
+        default=CFG_IMAGE_SIZE,
+        help="Training/eval resolution. Use <=0 to disable resizing and keep native image resolution.",
+    )
     # ── Curriculum ────────────────────────────────────────────────
     parser.add_argument("--curriculum", type=str, default="none",
                         choices=["none", "hard", "soft", "reverse", "soft_reverse"],
@@ -891,6 +990,16 @@ if __name__ == "__main__":
                         help="Enable DREAM-style target rectification during training.")
     parser.add_argument("--dream_lambda", type=float, default=10.0,
                         help="DREAM lambda strength (CatVTON paper ablation reports best around 10).")
+    parser.add_argument("--use_attention_regularization", action="store_true", default=False,
+                        help="Add background-preservation regularization on predicted x0 latents.")
+    parser.add_argument("--attn_reg_lambda", type=float, default=1.0,
+                        help="Weight for attention regularization term.")
+    parser.add_argument("--attn_reg_threshold", type=float, default=0.08,
+                        help="Pixel-space |GT-person| threshold to define changed regions (in [0,2]).")
+    parser.add_argument("--use_attention_score_regularization", action="store_true", default=False,
+                        help="Regularize attention activation magnitude as a proxy for minimizing unnecessary attention.")
+    parser.add_argument("--attn_score_reg_lambda", type=float, default=1e-4,
+                        help="Weight for attention-score proxy regularization.")
 
     args = parser.parse_args()
 

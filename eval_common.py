@@ -433,21 +433,6 @@ def evaluate_all_splits(
     triplet_results: Dict[str, dict] = OrderedDict()
     street_results: Dict[str, dict] = OrderedDict()
 
-    for name, loader in loaders.curvton.items():
-        curvton_results[name] = evaluate_loader(
-            loader=loader,
-            predict_fn=predict_fn,
-            device=device,
-            progress_name=name,
-            max_batches=max_batches,
-            eval_frac=eval_frac_curvton,
-            paired_metrics=True,
-            unpaired_metrics=True,
-            apply_vae_gt_roundtrip=True,
-            feature_cache_dir=(str(Path(feature_cache_root) / "curvton" / name) if feature_cache_root else None),
-        )
-        summarize_single(name, curvton_results[name])
-
     for name, loader in loaders.triplet.items():
         triplet_results[name] = evaluate_loader(
             loader=loader,
@@ -478,9 +463,24 @@ def evaluate_all_splits(
         )
         summarize_single(name, street_results[name])
 
-    summarize_group("CURVTON SPLITS + OVERALL", curvton_results)
+    for name, loader in loaders.curvton.items():
+        curvton_results[name] = evaluate_loader(
+            loader=loader,
+            predict_fn=predict_fn,
+            device=device,
+            progress_name=name,
+            max_batches=max_batches,
+            eval_frac=eval_frac_curvton,
+            paired_metrics=True,
+            unpaired_metrics=True,
+            apply_vae_gt_roundtrip=True,
+            feature_cache_dir=(str(Path(feature_cache_root) / "curvton" / name) if feature_cache_root else None),
+        )
+        summarize_single(name, curvton_results[name])
+
     summarize_group("TRIPLET (DRESSCODE + VITONHD + OVERALL)", triplet_results)
     summarize_group("STREET TRYON (UNPAIRED ONLY)", street_results)
+    summarize_group("CURVTON SPLITS + OVERALL", curvton_results)
 
     return {
         "curvton": curvton_results,

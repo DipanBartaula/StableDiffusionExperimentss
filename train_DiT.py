@@ -6,15 +6,15 @@ Conditioning approach (CatVTON-style spatial concatenation)
   cond_lat    = VAE( cat([person, cloth], W) )    [B, 4, H, 2W]
   target_lat  = VAE( cat([gt,     cloth], W) )    [B, 4, H, 2W]
   noisy       = DDPM.add_noise(target_lat, ε, t)  [B, 4, H, 2W]
-  full_input  = cat([noisy, cond_lat], W)          [B, 4, H, 4W]
-  → HunyuanDiT2DModel (2D input, NO packing) → take left half → ε loss
+  full_input  = cat([noisy, cond_lat], C)          [B, 8, H, 2W]
+  → HunyuanDiT2DModel (2D input, NO packing) → take first 4 channels → ε loss
 
 DDPM epsilon-prediction training:
   noisy  = scheduler.add_noise(clean, ε, t)      t ~ U[0, 1000]
   target = ε   (model predicts the noise)
   loss   = MSE(predicted_ε, true_ε)
 
-RoPE positional embeddings are recomputed for the wider H×4W input.
+RoPE positional embeddings are computed for latent spatial size H×2W.
 Supports hard / soft / reverse curriculum training on CurvTon.
 
 PREREQUISITES:
@@ -72,6 +72,38 @@ from utils import (
     _pose_keypoint_error,
 )
 
+class _AttentionActivationRegularizer:
+    """Collect attention output magnitude as a proxy for unnecessary attention."""
+
+    def __init__(self, module):
+        self._handles = []
+        self._vals = []
+        for name, subm in module.named_modules():
+            if not hasattr(subm, "to_q"):
+                continue
+            if (".attn1" not in name) and (".attn2" not in name):
+                continue
+            self._handles.append(subm.register_forward_hook(self._hook))
+
+    def _hook(self, module, inp, out):
+        if torch.is_tensor(out):
+            self._vals.append(out.float().pow(2).mean())
+        elif isinstance(out, (tuple, list)) and len(out) > 0 and torch.is_tensor(out[0]):
+            self._vals.append(out[0].float().pow(2).mean())
+
+    def clear(self):
+        self._vals.clear()
+
+    def penalty(self, device):
+        if not self._vals:
+            return torch.zeros((), device=device)
+        return torch.stack(self._vals).mean()
+
+    def close(self):
+        for h in self._handles:
+            h.remove()
+        self._handles.clear()
+
 try:
     import lpips as lpips_lib
 except ImportError:
@@ -115,16 +147,17 @@ def run_full_inference_hunyuan(
     # Start from pure noise (target shape)
     latents = torch.randn(B, C, H_lat, W_lat, device=device, dtype=dtype)
 
-    # Full spatial concat width: noisy ‖ cond → [B, 4, H, 2W]
-    W_full = W_lat * 2
+    # Channel concat: noisy + cond -> [B, 8, H, W]
+    W_full = W_lat
 
     # Zero text conditioning (T5 + CLIP, 1 token each)
     txt_emb  = torch.zeros(B, 1, model.cross_attn_dim, device=device, dtype=dtype)
     txt_mask = torch.ones(B, 1, device=device, dtype=torch.bool)
 
     # image_meta_size [B, 6]: (orig_H, orig_W, crop_top, crop_left, tgt_H, tgt_W) in pixels
+    px_scale = 8 if model.use_vae else 1
     meta_size = torch.tensor(
-        [[H_lat * 8, W_full * 8, 0, 0, H_lat * 8, W_full * 8]] * B,
+        [[H_lat * px_scale, W_full * px_scale, 0, 0, H_lat * px_scale, W_full * px_scale]] * B,
         device=device, dtype=dtype,
     )
     style_ids = torch.zeros(B, device=device, dtype=torch.long)
@@ -135,7 +168,7 @@ def run_full_inference_hunyuan(
     model.inference_scheduler.set_timesteps(num_inference_steps, device=device)
 
     for t in model.inference_scheduler.timesteps:
-        full_lat = torch.cat([latents, cond_latents], dim=3)   # [B, 4, H, 2W]
+        full_lat = torch.cat([latents, cond_latents], dim=1)   # [B, 8, H, W]
 
         noise_pred_full = model.transformer(
             hidden_states=full_lat,
@@ -148,9 +181,9 @@ def run_full_inference_hunyuan(
             style=style_ids,
             image_rotary_emb=(rope_cos, rope_sin),
             return_dict=False,
-        )[0]                                                    # [B, 4, H, 2W]
+        )[0]
 
-        noise_pred = noise_pred_full[:, :, :, :W_lat]          # left half only
+        noise_pred = noise_pred_full[:, :C]
         latents = model.inference_scheduler.step(noise_pred, t, latents).prev_sample
 
     return latents
@@ -338,7 +371,7 @@ def train(args):
     genders = ("female", "male") if args.gender == "all" else (args.gender,)
 
     # ── Model ───────────────────────────────────────────────────
-    model = HunyuanDiTModel(dtype=dtype, gradient_checkpointing=True).to(device)
+    model = HunyuanDiTModel(dtype=dtype, gradient_checkpointing=True, use_vae=True).to(device)
 
     if args.ootd:
         print("\n🔶 OOTDiffusion mode: cloth-only cond (no person/mask)")
@@ -348,6 +381,10 @@ def train(args):
         _mode_tag = "attn"
     else:
         _mode_tag = "full"
+
+    attn_score_reg = None
+    if args.use_attention_score_regularization:
+        attn_score_reg = _AttentionActivationRegularizer(model.transformer)
 
     _frac_tag   = f"_frac{int(args.data_fraction * 100)}pct" if args.data_fraction < 1.0 else ""
     _phase2_tag = "_phase2" if getattr(args, 'phase2_data_path', None) else ""
@@ -763,14 +800,15 @@ def train(args):
                 )
                 noisy_latents = model.scheduler.add_noise(target_latents, noise, timesteps)
 
-                # ── Spatial concat: [noisy ‖ cond] along width ─────
-                full_lat = torch.cat([noisy_latents, cond_latents], dim=3)
+                # ── Channel concat: [noisy, cond] ───────────────────
+                full_lat = torch.cat([noisy_latents, cond_latents], dim=1)
                 H_full, W_full = full_lat.shape[2], full_lat.shape[3]
 
                 rope_cos, rope_sin = model.get_rope_embed(H_full, W_full, device, dtype)
 
+                px_scale = 8 if model.use_vae else 1
                 meta_size = torch.tensor(
-                    [[H_full * 8, W_full * 8, 0, 0, H_full * 8, W_full * 8]] * B,
+                    [[H_full * px_scale, W_full * px_scale, 0, 0, H_full * px_scale, W_full * px_scale]] * B,
                     device=device, dtype=dtype,
                 )
 
@@ -781,6 +819,8 @@ def train(args):
                 # ── Forward ─────────────────────────────────────────
                 optimizer.zero_grad(set_to_none=True)
                 with torch.autocast("cuda", dtype=torch.float16):
+                    if attn_score_reg is not None:
+                        attn_score_reg.clear()
                     noise_pred_full = model.transformer(
                         hidden_states=full_lat,
                         timestep=timesteps,
@@ -794,8 +834,12 @@ def train(args):
                         return_dict=False,
                     )[0]
 
-                noise_pred = noise_pred_full[:, :, :, :W_lat]
-                loss = F.mse_loss(noise_pred.float(), noise.float())
+                noise_pred = noise_pred_full[:, :C_lat]
+                loss_diff = F.mse_loss(noise_pred.float(), noise.float())
+                loss_attn_score_reg = torch.zeros((), device=device, dtype=loss_diff.dtype)
+                if attn_score_reg is not None:
+                    loss_attn_score_reg = attn_score_reg.penalty(device).to(loss_diff.dtype)
+                loss = loss_diff + args.attn_score_reg_lambda * loss_attn_score_reg
 
                 # ── Backward ────────────────────────────────────────
                 scaler.scale(loss).backward()
@@ -826,6 +870,8 @@ def train(args):
             epoch_losses.append(loss_val)
             wandb.log({
                 "train/loss":              loss_val,
+                "train/loss_diff":         loss_diff.item(),
+                "train/loss_attn_score_reg": loss_attn_score_reg.item(),
                 "train/loss_ema":          ema_loss,
                 "train/loss_mean":         loss_mean,
                 "train/loss_var":          loss_var,
@@ -917,6 +963,8 @@ def train(args):
     print(f"✓ Final checkpoint: {final_path}")
     print("=" * 60)
     wandb.finish()
+    if attn_score_reg is not None:
+        attn_score_reg.close()
 
     if world_size > 1:
         dist.destroy_process_group()
@@ -977,6 +1025,10 @@ if __name__ == "__main__":
                    help="Path to triplet_dataset_train for phase-2 training (hard curriculum)")
     p.add_argument("--phase2_start_step", type=int,  default=28801,
                    help="Step at which to switch from phase-1 to phase-2 data")
+    p.add_argument("--use_attention_score_regularization", action="store_true", default=False,
+                   help="Regularize DiT attention activation magnitude as a proxy for minimal attention.")
+    p.add_argument("--attn_score_reg_lambda", type=float, default=1e-4,
+                   help="Weight for attention-score proxy regularization.")
 
     args = p.parse_args()
     train(args)

@@ -2,6 +2,8 @@ import argparse
 import os
 
 import torch
+from PIL import Image
+from torchvision import transforms
 from torchvision.utils import save_image
 
 from meanflow_model import MeanFlowDiT250M, MeanFlowDiTConfig
@@ -24,7 +26,8 @@ def _build_datapred_model(args):
         image_size=args.image_size,
         image_height=args.image_size,
         image_width=args.image_width if args.image_width > 0 else args.image_size * 2,
-        in_channels=3,
+        in_channels=6,
+        out_channels=3,
         patch_size=args.patch_size,
         hidden_size=hidden,
         depth=depth,
@@ -41,6 +44,7 @@ def _build_meanflow_model(args):
         image_height=args.image_size,
         image_width=args.image_width if args.image_width > 0 else args.image_size * 2,
         in_channels=3,
+        out_channels=3,
         patch_size=args.patch_size,
         hidden_size=hidden,
         depth=depth,
@@ -78,6 +82,13 @@ def run_inference(args: argparse.Namespace) -> None:
             sqrt_ab=sqrt_ab,
             sqrt_1mab=sqrt_1mab,
             device=device,
+            cond=(
+                torch.cat([
+                    _load_rgb(args.person_path, args.image_size, args.image_size).unsqueeze(0).to(device),
+                    _load_rgb(args.cloth_path, args.image_size, args.image_size).unsqueeze(0).to(device),
+                ], dim=3).repeat(args.batch_size, 1, 1, 1)
+                if args.person_path and args.cloth_path else None
+            ),
         )
     else:
         model = _build_meanflow_model(args).to(device).eval()
@@ -114,9 +125,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mlp_ratio", type=float, default=4.0)
     p.add_argument("--diffusion_steps", type=int, default=50)
     p.add_argument("--time_embed_scale", type=float, default=1000.0)
+    p.add_argument("--person_path", type=str, default=None)
+    p.add_argument("--cloth_path", type=str, default=None)
     return p
 
 
 if __name__ == "__main__":
     run_inference(build_parser().parse_args())
 
+def _load_rgb(path: str, h: int, w: int) -> torch.Tensor:
+    tf = transforms.Compose([
+        transforms.Resize((h, w), interpolation=transforms.InterpolationMode.BILINEAR),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5] * 3, [0.5] * 3),
+    ])
+    return tf(Image.open(path).convert("RGB"))

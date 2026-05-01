@@ -13,13 +13,25 @@ from utils import make_beta_schedule, sample_ddim_like
 def _load_cfg(ckpt_cfg: dict) -> DiTConfig:
     return DiTConfig(
         image_size=ckpt_cfg.get("image_size", 64),
-        in_channels=ckpt_cfg.get("in_channels", 3),
+        image_height=ckpt_cfg.get("image_height", ckpt_cfg.get("image_size", 64)),
+        image_width=ckpt_cfg.get("image_width", ckpt_cfg.get("image_size", 64) * 2),
+        in_channels=ckpt_cfg.get("in_channels", 6),
+        out_channels=ckpt_cfg.get("out_channels", 3),
         patch_size=ckpt_cfg.get("patch_size", 2),
         hidden_size=ckpt_cfg.get("hidden_size", 1536),
         depth=ckpt_cfg.get("depth", 9),
         num_heads=ckpt_cfg.get("num_heads", 24),
         mlp_ratio=ckpt_cfg.get("mlp_ratio", 4.0),
     )
+
+
+def _load_rgb(path: str, h: int, w: int) -> torch.Tensor:
+    tf = transforms.Compose([
+        transforms.Resize((h, w), interpolation=transforms.InterpolationMode.BILINEAR),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5] * 3, [0.5] * 3),
+    ])
+    return tf(Image.open(path).convert("RGB"))
 
 
 @torch.no_grad()
@@ -38,12 +50,26 @@ def main(args: argparse.Namespace) -> None:
 
     sample = sample_ddim_like(
         model,
-        shape=(args.batch_size, cfg.in_channels, cfg.image_size, cfg.image_size),
+        shape=(args.batch_size, cfg.out_channels if cfg.out_channels is not None else 3, cfg.image_height, cfg.image_width),
         timesteps=args.diffusion_steps,
         sqrt_ab=sqrt_ab,
         sqrt_1mab=sqrt_1mab,
         device=device,
+        cond=None,
     )
+    if args.person_path and args.cloth_path:
+        person = _load_rgb(args.person_path, cfg.image_height, cfg.image_size).unsqueeze(0).to(device)
+        cloth = _load_rgb(args.cloth_path, cfg.image_height, cfg.image_size).unsqueeze(0).to(device)
+        cond = torch.cat([person, cloth], dim=3).repeat(args.batch_size, 1, 1, 1)
+        sample = sample_ddim_like(
+            model,
+            shape=(args.batch_size, cfg.out_channels if cfg.out_channels is not None else 3, cfg.image_height, cfg.image_width),
+            timesteps=args.diffusion_steps,
+            sqrt_ab=sqrt_ab,
+            sqrt_1mab=sqrt_1mab,
+            device=device,
+            cond=cond,
+        )
     sample = (sample.clamp(-1, 1) + 1) * 0.5
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     save_image(sample, args.output, nrow=min(args.batch_size, 4))
@@ -56,5 +82,7 @@ if __name__ == "__main__":
     p.add_argument("--output", type=str, default="results/custom_dit_samples.png")
     p.add_argument("--batch_size", type=int, default=4)
     p.add_argument("--diffusion_steps", type=int, default=100)
+    p.add_argument("--person_path", type=str, default=None)
+    p.add_argument("--cloth_path", type=str, default=None)
     main(p.parse_args())
 

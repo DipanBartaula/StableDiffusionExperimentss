@@ -103,17 +103,28 @@ class VitonHDDataset(Dataset):
         print(f"[VitonHD-{split}] Loaded {len(self.image_files)} samples")
 
         # Image transforms
-        self.image_transform = transforms.Compose([
-            transforms.Resize((size, size)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-        ])
+        if size and size > 0:
+            self.image_transform = transforms.Compose([
+                transforms.Resize((size, size)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            ])
+        else:
+            self.image_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            ])
 
         # Mask transforms (nearest neighbor to preserve binary values)
-        self.mask_transform = transforms.Compose([
-            transforms.Resize((size, size), interpolation=transforms.InterpolationMode.NEAREST),
-            transforms.ToTensor()
-        ])
+        if size and size > 0:
+            self.mask_transform = transforms.Compose([
+                transforms.Resize((size, size), interpolation=transforms.InterpolationMode.NEAREST),
+                transforms.ToTensor()
+            ])
+        else:
+            self.mask_transform = transforms.Compose([
+                transforms.ToTensor()
+            ])
 
     def __len__(self):
         return len(self.image_files)
@@ -167,7 +178,10 @@ class VitonHDDataset(Dataset):
 
         # If still not found, create empty mask
         if mask_img is None:
-            mask_img = Image.new('L', (self.size, self.size), 0)
+            if self.size and self.size > 0:
+                mask_img = Image.new('L', (self.size, self.size), 0)
+            else:
+                mask_img = Image.new('L', person_img.size, 0)
             # Only print warning once per file
             if not hasattr(self, '_warned_masks'):
                 self._warned_masks = set()
@@ -366,11 +380,14 @@ def _eval_triplet_person_aware_tensor(
         transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(cloth_img)
     )
 
-    final_tf = transforms.Compose([
-        transforms.Resize((out_size, out_size), interpolation=transforms.InterpolationMode.BICUBIC),
+    ops = []
+    if out_size and out_size > 0:
+        ops.append(transforms.Resize((out_size, out_size), interpolation=transforms.InterpolationMode.BICUBIC))
+    ops.extend([
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
     ])
+    final_tf = transforms.Compose(ops)
     return final_tf(person_c), final_tf(cloth_c), final_tf(tryon_c)
 
 
@@ -456,12 +473,17 @@ class CurvtonDataset(Dataset):
         print(f"[CurvTon-{difficulty}/{gender}] {len(self.triplets)} valid triplets")
 
         # Image transform
-        self.img_tf = transforms.Compose([
-            transforms.Resize((size, size)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-        ])
-        self._zero_mask = torch.zeros(1, size, size)
+        if size and size > 0:
+            self.img_tf = transforms.Compose([
+                transforms.Resize((size, size)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ])
+        else:
+            self.img_tf = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ])
 
     def __len__(self):
         return len(self.triplets)
@@ -486,7 +508,7 @@ class CurvtonDataset(Dataset):
                 return {
                     "ground_truth": vton,
                     "cloth":        cloth,
-                    "mask":         self._zero_mask,
+                    "mask":         torch.zeros(1, person.shape[1], person.shape[2]),
                     "person":       person,
                 }
             except Exception:
@@ -620,13 +642,17 @@ def _triplet_eval_transform(size: int = 512) -> transforms.Compose:
     This ensures the metric comparison uses the center of the image at
     a consistent scale regardless of original aspect ratio.
     """
-    return transforms.Compose([
-        transforms.Resize(768),              # shortest edge → 768, keeps AR
-        transforms.CenterCrop(768),          # square 768×768
-        transforms.Resize((size, size)),     # final model resolution
+    ops = [
+        transforms.Resize(768),              # shortest edge -> 768, keeps AR
+        transforms.CenterCrop(768),          # square 768x768
+    ]
+    if size and size > 0:
+        ops.append(transforms.Resize((size, size)))  # final model resolution
+    ops.extend([
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
     ])
+    return transforms.Compose(ops)
 
 class TripletDataset(Dataset):
     """Load (cloth, person, tryon) triplets from the triplet_dataset layout.
@@ -709,12 +735,19 @@ class TripletDataset(Dataset):
             for stem in common
         ]
 
-        self._tf = transform if transform is not None else transforms.Compose([
-            transforms.Resize((size, size)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-        ])
-        self._zero_mask = torch.zeros(1, size, size)
+        if transform is not None:
+            self._tf = transform
+        elif size and size > 0:
+            self._tf = transforms.Compose([
+                transforms.Resize((size, size)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ])
+        else:
+            self._tf = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ])
 
     def __len__(self) -> int:
         return len(self._items)
@@ -740,7 +773,7 @@ class TripletDataset(Dataset):
                     "ground_truth": tryon_t,
                     "cloth":        cloth_t,
                     "person":       person_t,
-                    "mask":         self._zero_mask,
+                    "mask":         torch.zeros(1, person_t.shape[1], person_t.shape[2]),
                 }
             except Exception:
                 _log.warning("TripletDataset __getitem__ attempt %d/%d idx=%d failed:\n%s",
@@ -1443,3 +1476,4 @@ def subsample_dataset(dataset, fraction, seed=42):
     indices = rng.sample(range(n), k)
     print(f"  ↳ Sub-sampled {k}/{n} samples ({fraction*100:.0f}%)")
     return Subset(dataset, indices)
+

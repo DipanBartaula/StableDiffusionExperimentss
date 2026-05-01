@@ -96,8 +96,24 @@ def _build_predict_fn(args, model):
         gt = _to_01(batch["ground_truth"].to(device))
         bs = gt.shape[0]
         h, w = gt.shape[-2], gt.shape[-1] * 2
+        cloth = batch["cloth"].to(device)
+        person = batch["person"].to(device)
+        cond = torch.cat([person, cloth], dim=3)
         if args.approach == "datapred":
-            pred = _predict_datapred(model, device, bs, h, w, args.diffusion_steps)
+            betas = make_beta_schedule(args.diffusion_steps).to(device)
+            alphas = 1.0 - betas
+            alpha_bar = torch.cumprod(alphas, dim=0)
+            sqrt_ab = torch.sqrt(alpha_bar)
+            sqrt_1mab = torch.sqrt(1 - alpha_bar)
+            pred = sample_ddim_like(
+                model=model,
+                shape=(bs, 3, h, w),
+                timesteps=args.diffusion_steps,
+                sqrt_ab=sqrt_ab,
+                sqrt_1mab=sqrt_1mab,
+                device=device,
+                cond=cond,
+            )[:, :, :, :h]
         else:
             pred = _predict_meanflow(model, device, bs, h, w, args.time_embed_scale)
         pred = _to_01(pred)
@@ -173,7 +189,23 @@ def main(args: argparse.Namespace) -> None:
         n_images += bs
         h, w = gt.shape[-2], gt.shape[-1] * 2
         if args.approach == "datapred":
-            pred = _predict_datapred(model, device, bs, h, w, args.diffusion_steps)
+            cloth = batch["cloth"].to(device)
+            person = batch["person"].to(device)
+            cond = torch.cat([person, cloth], dim=3)
+            betas = make_beta_schedule(args.diffusion_steps).to(device)
+            alphas = 1.0 - betas
+            alpha_bar = torch.cumprod(alphas, dim=0)
+            sqrt_ab = torch.sqrt(alpha_bar)
+            sqrt_1mab = torch.sqrt(1 - alpha_bar)
+            pred = sample_ddim_like(
+                model=model,
+                shape=(bs, 3, h, w),
+                timesteps=args.diffusion_steps,
+                sqrt_ab=sqrt_ab,
+                sqrt_1mab=sqrt_1mab,
+                device=device,
+                cond=cond,
+            )[:, :, :, :h]
         else:
             pred = _predict_meanflow(model, device, bs, h, w, args.time_embed_scale)
         pred = _to_01(pred)

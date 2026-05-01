@@ -43,7 +43,10 @@ def _log_and_validate_components(model) -> None:
 def _load_cfg(ckpt_cfg: dict) -> DiTConfig:
     return DiTConfig(
         image_size=ckpt_cfg.get("image_size", 64),
-        in_channels=ckpt_cfg.get("in_channels", 3),
+        image_height=ckpt_cfg.get("image_height", ckpt_cfg.get("image_size", 64)),
+        image_width=ckpt_cfg.get("image_width", ckpt_cfg.get("image_size", 64) * 2),
+        in_channels=ckpt_cfg.get("in_channels", 6),
+        out_channels=ckpt_cfg.get("out_channels", 3),
         patch_size=ckpt_cfg.get("patch_size", 2),
         hidden_size=ckpt_cfg.get("hidden_size", 1536),
         depth=ckpt_cfg.get("depth", 9),
@@ -56,15 +59,20 @@ def build_predict_fn(model, diffusion_steps: int, sqrt_ab: torch.Tensor, sqrt_1m
     @torch.no_grad()
     def _predict(batch, device):
         gt = batch["ground_truth"].to(device)
+        cloth = batch["cloth"].to(device)
+        person = batch["person"].to(device)
+        cond = torch.cat([person, cloth], dim=3)
         bsz = gt.shape[0]
         sample = sample_ddim_like(
             model=model,
-            shape=(bsz, model.cfg.in_channels, model.cfg.image_size, model.cfg.image_size),
+            shape=(bsz, model.cfg.out_channels if model.cfg.out_channels is not None else 3, cond.shape[-2], cond.shape[-1]),
             timesteps=diffusion_steps,
             sqrt_ab=sqrt_ab,
             sqrt_1mab=sqrt_1mab,
             device=device,
+            cond=cond,
         )
+        sample = sample[:, :, :, :gt.shape[-1]]
         if sample.shape[-2:] != gt.shape[-2:]:
             sample = F.interpolate(sample, size=gt.shape[-2:], mode="bilinear", align_corners=False)
         return sample

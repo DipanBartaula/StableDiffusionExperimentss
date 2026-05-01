@@ -112,7 +112,8 @@ def train(args: argparse.Namespace) -> None:
         image_size=args.image_size,
         image_height=image_height,
         image_width=image_width,
-        in_channels=3,
+        in_channels=6,
+        out_channels=3,
         patch_size=args.patch_size,
         hidden_size=hidden_size,
         depth=depth,
@@ -248,9 +249,10 @@ def train(args: argparse.Namespace) -> None:
 
         t = torch.multinomial(timestep_weights, x0.shape[0], replacement=True)
         x_t, _ = q_sample(x0, t, sqrt_ab, sqrt_1mab)
+        model_in = torch.cat([x_t, cond_vis], dim=1)
 
         with autocast(enabled=(device.type == "cuda")):
-            x0_pred = model(x_t, t)
+            x0_pred = model(model_in, t)
             loss = F.mse_loss(x0_pred, x0)
         optimizer.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
@@ -271,6 +273,7 @@ def train(args: argparse.Namespace) -> None:
                 sqrt_ab=sqrt_ab,
                 sqrt_1mab=sqrt_1mab,
                 device=device,
+                cond=cond_vis,
             ).detach().cpu()
             pred_tryon = x0_pred[:8].detach().cpu()[:, :, :, :image_height]
             gen_tryon = gen[:8, :, :, :image_height]

@@ -80,11 +80,13 @@ def sample_ddim_like(
     sqrt_ab: torch.Tensor,
     sqrt_1mab: torch.Tensor,
     device: torch.device,
+    cond: torch.Tensor | None = None,
 ) -> torch.Tensor:
     x = torch.randn(shape, device=device)
     for step in reversed(range(timesteps)):
         t = torch.full((shape[0],), step, device=device, dtype=torch.long)
-        x0_pred = model(x, t).clamp(-1, 1)
+        model_in = torch.cat([x, cond], dim=1) if cond is not None else x
+        x0_pred = model(model_in, t).clamp(-1, 1)
         if step == 0:
             x = x0_pred
             break
