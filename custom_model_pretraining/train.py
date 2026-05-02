@@ -1,5 +1,6 @@
 import argparse
 import glob
+import datetime
 import os
 import random
 from typing import Dict, Iterator
@@ -32,12 +33,22 @@ except Exception:
 
 
 def _maybe_init_ddp() -> tuple[int, int, int, bool, torch.device]:
-    rank = int(os.environ.get("RANK", 0))
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    rank = int(os.environ.get("RANK", os.environ.get("SLURM_PROCID", 0)))
+    local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("SLURM_LOCALID", 0)))
+    world_size = int(os.environ.get("WORLD_SIZE", os.environ.get("SLURM_NTASKS", 1)))
     is_main = rank == 0
     if world_size > 1:
-        dist.init_process_group("nccl")
+        if "MASTER_ADDR" not in os.environ:
+            os.environ["MASTER_ADDR"] = os.environ.get("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1")
+        if "MASTER_PORT" not in os.environ:
+            os.environ["MASTER_PORT"] = "29500"
+        dist.init_process_group(
+            backend="nccl",
+            init_method="env://",
+            timeout=datetime.timedelta(minutes=30),
+            rank=rank,
+            world_size=world_size,
+        )
         torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
     return rank, local_rank, world_size, is_main, device

@@ -23,6 +23,30 @@ except Exception:
 from eval_common import build_eval_loaders, evaluate_all_splits  # noqa: E402
 from train_ootdiffusion_local import OOTDiffusionModel  # noqa: E402
 
+DEFAULT_CURVTON_SPLITS = [
+    "easy",
+    "medium",
+    "hard",
+    "overall",
+    "traditional",
+    "non_traditional",
+    "dresses",
+    "upper_body",
+    "lower_body",
+]
+
+_CURVTON_SPLIT_TO_LOADER = {
+    "easy": "curvton_easy",
+    "medium": "curvton_medium",
+    "hard": "curvton_hard",
+    "overall": "curvton_overall",
+    "traditional": "curvton_traditional",
+    "non_traditional": "curvton_non_traditional",
+    "dresses": "curvton_dresses",
+    "upper_body": "curvton_upper_body",
+    "lower_body": "curvton_lower_body",
+}
+
 
 def _clean_state_dict(sd):
     out = {}
@@ -116,6 +140,14 @@ def main(args):
         gender=args.gender,
         street_split=args.street_split,
     )
+    if args.curvton_splits:
+        requested = [s.strip().lower() for s in args.curvton_splits.split(",") if s.strip()]
+        keep_keys = []
+        for split in requested:
+            key = _CURVTON_SPLIT_TO_LOADER.get(split)
+            if key is not None:
+                keep_keys.append(key)
+        loaders.curvton = {k: v for k, v in loaders.curvton.items() if k in keep_keys}
     feature_cache_root = _resolve_feature_cache_root(args)
     print(f"- Feature cache dir: {feature_cache_root}")
     results = evaluate_all_splits(
@@ -124,6 +156,7 @@ def main(args):
         device=device,
         max_batches=args.max_batches,
         eval_frac_curvton=args.eval_frac_curvton,
+        eval_frac_curvton_extra=args.eval_frac_curvton_extra,
         eval_frac_triplet=args.eval_frac_triplet,
         eval_frac_street=args.eval_frac_street,
         feature_cache_root=feature_cache_root,
@@ -149,11 +182,13 @@ if __name__ == "__main__":
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
-    p.add_argument("--num_inference_steps", type=int, default=30)
+    p.add_argument("--num_inference_steps", type=int, default=50)
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
     p.add_argument("--eval_frac_curvton", type=float, default=0.02)
+    p.add_argument("--eval_frac_curvton_extra", type=float, default=0.02)
     p.add_argument("--eval_frac_triplet", type=float, default=0.02)
     p.add_argument("--eval_frac_street", type=float, default=0.02)
+    p.add_argument("--curvton_splits", type=str, default=",".join(DEFAULT_CURVTON_SPLITS))
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--cuda_device", type=int, default=None, help="CUDA device index (e.g., 1 -> cuda:1). Ignored if --device is set.")
     p.add_argument("--feature_cache_root", type=str, default="/iopsstor/scratch/cscs/dbartaula/featurecache")

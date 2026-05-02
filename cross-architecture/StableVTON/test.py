@@ -59,14 +59,42 @@ class FakeScheduler:
 
 
 class FakeUNet(nn.Module):
+    class _FakeRes(nn.Module):
+        def __init__(self, out_channels):
+            super().__init__()
+            self.out_channels = out_channels
+
+    class _FakeUp(nn.Module):
+        def __init__(self, ch):
+            super().__init__()
+            self.resnets = nn.ModuleList([FakeUNet._FakeRes(ch)])
+
+        def forward(self, x):
+            return x
+
     def __init__(self):
         super().__init__()
         self.conv_in = nn.Conv2d(4, 4, 3, padding=1)
         self.config = _Cfg(cross_attention_dim=64, in_channels=4)
+        self.up_blocks = nn.ModuleList([FakeUNet._FakeUp(4), FakeUNet._FakeUp(4)])
 
     def forward(self, x, timesteps, encoder_hidden_states, added_cond_kwargs=None):
         _ = timesteps, encoder_hidden_states, added_cond_kwargs
         return SimpleNamespace(sample=self.conv_in(x))
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        return cls()
+
+
+class FakeCLIPVision(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.config = SimpleNamespace(projection_dim=32)
+
+    def forward(self, pixel_values):
+        b = pixel_values.shape[0]
+        return SimpleNamespace(image_embeds=torch.randn(b, self.config.projection_dim, device=pixel_values.device))
 
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
@@ -79,6 +107,7 @@ def main():
     stable.AutoencoderKL = FakeVAE
     stable.DDPMScheduler = FakeScheduler
     stable.UNet2DConditionModel = FakeUNet
+    stable.CLIPVisionModelWithProjection = FakeCLIPVision
 
     device = torch.device("cpu")
     model = stable.StableVTONModel(model_name="dummy").to(device)
@@ -98,12 +127,12 @@ def main():
     noise = torch.randn_like(target_lat)
     timesteps = torch.randint(0, model.scheduler.config.num_train_timesteps, (b,), device=device).long()
     noisy = model.scheduler.add_noise(target_lat, noise, timesteps)
-    pred = model(noisy, mask_lat, agnostic_lat, pose_lat, timesteps)
+    pred = model(noisy, mask_lat, agnostic_lat, pose_lat, cloth, timesteps)
     assert pred.shape == noise.shape, f"Pred shape {pred.shape} != noise shape {noise.shape}"
 
     loss = F.mse_loss(pred, noise)
     loss.backward()
-    assert model.unet.conv_in.weight.grad is not None, "No grad on StableVTON UNet conv"
+    assert model.sd_encoder_copy.conv_in.weight.grad is not None, "No grad on SD encoder copy conv"
     print("StableVTON forward/backward PASS")
 
 

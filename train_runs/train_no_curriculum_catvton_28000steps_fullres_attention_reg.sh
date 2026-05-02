@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=none_cat_28000_fullres_attnreg
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
@@ -46,16 +46,18 @@ for _if in hsn0 ib0 eth0 enp0s3 lo; do
   fi
 done
 
-export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
+MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_ADDR
 srun torchrun \
-  --nnodes=1 \
+  --nnodes=2 \
   --nproc_per_node=4 \
-  --standalone \
+  --node_rank="${SLURM_NODEID}" \
+  --master_addr="${MASTER_ADDR}" \
   --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 6 --num_workers 16 --gender all --image_size 0 --train_mode full_unet --use_dream --dream_lambda 10.0 --use_attention_score_regularization --attn_score_reg_lambda 1e-4 --save_interval 1000 --image_log_interval 500 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres_dream_reg
+  train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 4 --num_workers 16 --gender all --image_size 0 --train_mode full_unet --use_dream --dream_lambda 10.0 --use_attention_score_regularization --attn_score_reg_lambda 1e-4 --save_interval 1000 --image_log_interval 500 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres_dream_reg
 

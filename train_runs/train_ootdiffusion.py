@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET_SCRIPT = ROOT / 'cross-architecture/OOTDiffusion/train_ootdiffusion.sh'
+TARGET_SCRIPT = ROOT / "train_runs/train_ootdiffusion.sh"
 
 
 def main() -> int:

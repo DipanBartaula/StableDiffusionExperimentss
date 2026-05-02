@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=medium_only_catvton_fullres
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
@@ -27,9 +27,14 @@ export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
 export WANDB_PROJECT=Stable_diffusion
 export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
-export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
+export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
+export NCCL_DEBUG=INFO
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
-srun torchrun --nnodes=1 --nproc_per_node=4 --standalone --master_port=$MASTER_PORT \
-  train.py --dataset curvton --difficulty medium --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 6 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 500 --use_dream --dream_lambda 10.0 --skip_eval --no_resume --run_name Stable_diffusion_train_medium_only_catvton_fullres
+MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_ADDR
+
+srun torchrun --nnodes=2 --nproc_per_node=4 --node_rank="${SLURM_NODEID}" --master_addr="${MASTER_ADDR}" --master_port=$MASTER_PORT \
+  train.py --dataset curvton --difficulty medium --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 4 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 500 --use_dream --dream_lambda 10.0 --skip_eval --no_resume --run_name Stable_diffusion_train_medium_only_catvton_fullres
 

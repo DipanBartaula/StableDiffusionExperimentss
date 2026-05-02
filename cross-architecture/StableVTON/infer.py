@@ -59,8 +59,10 @@ def infer(args):
         model.sd_encoder_copy.load_state_dict(_clean_state_dict(ckpt["sd_encoder_copy_state_dict"]), strict=False)
     if "garment_token_proj_state_dict" in ckpt:
         model.garment_token_proj.load_state_dict(_clean_state_dict(ckpt["garment_token_proj_state_dict"]), strict=False)
-    if "zero_cross_linear_state_dict" in ckpt:
-        model.zero_cross_linear.load_state_dict(_clean_state_dict(ckpt["zero_cross_linear_state_dict"]), strict=False)
+    if "clip_to_cross_state_dict" in ckpt:
+        model.clip_to_cross.load_state_dict(_clean_state_dict(ckpt["clip_to_cross_state_dict"]), strict=False)
+    if "decoder_zero_blocks_state_dict" in ckpt:
+        model.decoder_zero_blocks.load_state_dict(_clean_state_dict(ckpt["decoder_zero_blocks_state_dict"]), strict=False)
 
     os.makedirs(args.save_dir, exist_ok=True)
     written = 0
@@ -78,7 +80,7 @@ def infer(args):
             model.scheduler.set_timesteps(args.num_inference_steps, device=device)
             for t in model.scheduler.timesteps:
                 t_batch = torch.full((latents.shape[0],), int(t), device=device, dtype=torch.long)
-                noise_pred = model(latents, mask_lat, agnostic_lat, pose_lat, t_batch)
+                noise_pred = model(latents, mask_lat, agnostic_lat, pose_lat, cloth, t_batch)
                 latents = model.scheduler.step(noise_pred, t, latents).prev_sample
 
             out = model.vae.decode(latents / model.vae.config.scaling_factor).sample
@@ -107,7 +109,7 @@ def infer(args):
                 model.scheduler.set_timesteps(args.num_inference_steps, device=device)
                 for t in model.scheduler.timesteps:
                     t_batch = torch.full((latents.shape[0],), int(t), device=device, dtype=torch.long)
-                    noise_pred = model(latents, mask_lat, agnostic_lat, pose_lat, t_batch)
+                    noise_pred = model(latents, mask_lat, agnostic_lat, pose_lat, cloth, t_batch)
                     latents = model.scheduler.step(noise_pred, t, latents).prev_sample
 
                 out = model.vae.decode(latents / model.vae.config.scaling_factor).sample

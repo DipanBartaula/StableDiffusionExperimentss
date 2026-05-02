@@ -10,6 +10,7 @@ import random
 import argparse
 import traceback
 import logging
+import datetime
 
 logging.basicConfig(
     format="[%(asctime)s %(levelname)s] %(message)s",
@@ -127,7 +128,17 @@ def train(args):
     is_main    = (rank == 0)
 
     if world_size > 1:
-        dist.init_process_group("nccl")
+        if "MASTER_ADDR" not in os.environ:
+            os.environ["MASTER_ADDR"] = os.environ.get("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1")
+        if "MASTER_PORT" not in os.environ:
+            os.environ["MASTER_PORT"] = "29500"
+        dist.init_process_group(
+            backend="nccl",
+            init_method="env://",
+            timeout=datetime.timedelta(minutes=30),
+            rank=rank,
+            world_size=world_size,
+        )
         torch.cuda.set_device(local_rank)
 
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
@@ -655,6 +666,33 @@ def train(args):
                 if "person" not in batch:
                     raise KeyError("Expected 'person' (initial person image) in batch.")
                 person_img = batch["person"].to(device, non_blocking=True)
+                # Requested conditioning behavior:
+                # - masked person image -> use initial person image
+                # - mask -> black tensor
+                # - pose map -> use provided pose; otherwise black tensor fallback
+                black_mask = torch.zeros(
+                    person_img.shape[0], 1, person_img.shape[2], person_img.shape[3],
+                    device=device, dtype=person_img.dtype
+                )
+                pose_map = batch.get("pose_map", batch.get("pose", None))
+                if pose_map is None:
+                    pose_rgb = torch.full_like(person_img, -1.0)  # black in normalized [-1, 1]
+                else:
+                    pose_map = pose_map.to(device, non_blocking=True)
+                    if pose_map.ndim != 4:
+                        raise ValueError(f"Expected pose_map/pose to be [B,C,H,W], got shape={tuple(pose_map.shape)}")
+                    if pose_map.shape[1] == 1:
+                        pose_rgb = pose_map.expand(-1, 3, -1, -1)
+                    elif pose_map.shape[1] >= 3:
+                        pose_rgb = pose_map[:, :3]
+                    else:
+                        raise ValueError(
+                            f"Expected pose_map/pose channel count 1 or >=3, got {pose_map.shape[1]}"
+                        )
+                masked_person = person_img
+                person_with_pose = torch.clamp(0.5 * masked_person + 0.5 * pose_rgb, -1.0, 1.0)
+                # Keep mask application explicit for clarity; black_mask leaves tensor unchanged.
+                person_with_pose = person_with_pose * (1.0 - black_mask)
 
                 # Fused VAE encode: batch cond + target into a single forward pass
                 with torch.no_grad(), autocast():
@@ -663,7 +701,7 @@ def train(args):
                         cond_input   = cloth
                         target_input = gt
                     else:
-                        cond_input   = torch.cat([person_img, cloth], dim=3)
+                        cond_input   = torch.cat([person_with_pose, cloth], dim=3)
                         target_input = torch.cat([gt,         cloth], dim=3)
                     fused_input  = torch.cat([cond_input, target_input], dim=0)
                     fused_latents = model.vae.encode(fused_input).latent_dist.sample() * 0.18215

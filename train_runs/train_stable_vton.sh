@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=stable_vton
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
@@ -55,24 +55,28 @@ for _if in hsn0 ib0 eth0 enp0s3 lo; do
   fi
 done
 
-export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
+MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_ADDR
 srun torchrun \
-  --nnodes=1 \
+  --nnodes=2 \
   --nproc_per_node=4 \
-  --standalone \
+  --node_rank="${SLURM_NODEID}" \
+  --master_addr="${MASTER_ADDR}" \
   --master_port=$MASTER_PORT \
   cross-architecture/StableVTON/train_stable_vton_local.py \
   --curvton_data_path "${DATA_DIR}" \
-  --batch_size 6 \
+  --batch_size 4 \
   --image_size 0 \
   --num_workers 16 \
   --max_steps 28000 \
+  --wandb_project Stable_diffusion \
   --save_interval 1000 \
+  --image_log_interval 500 \
   --output_dir "${OUT_DIR}" \
   --no_resume \
   --run_name Stable_diffusion_train_stable_vton

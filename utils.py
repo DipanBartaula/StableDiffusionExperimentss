@@ -1256,7 +1256,21 @@ def _run_one_eval_sample(
             cloth      = batch["cloth"].to(device)
             person_img = batch.get("person", batch.get("masked_person")).to(device)
 
-            cond_input   = cloth if ootd else torch.cat([person_img, cloth], dim=3)
+            # Keep eval conditioning consistent with train.py:
+            # person_with_pose (masked person replaced by initial person, black-mask semantics)
+            # concatenated with cloth along width.
+            pose_map = batch.get("pose_map", batch.get("pose", None))
+            if pose_map is None:
+                pose_rgb = torch.full_like(person_img, -1.0)
+            else:
+                pose_map = pose_map.to(device)
+                if pose_map.shape[1] == 1:
+                    pose_rgb = pose_map.expand(-1, 3, -1, -1)
+                else:
+                    pose_rgb = pose_map[:, :3]
+            person_with_pose = torch.clamp(0.5 * person_img + 0.5 * pose_rgb, -1.0, 1.0)
+
+            cond_input   = cloth if ootd else torch.cat([person_with_pose, cloth], dim=3)
             cond_latents = model.vae.encode(cond_input).latent_dist.sample() * 0.18215
             pred_latents = run_full_inference(model, cond_latents, _eval_inf_steps)
 

@@ -232,6 +232,63 @@ def build_eval_loaders(
         if "all" in c:
             curvton_loaders["curvton_overall"] = c["all"]
 
+        # Additional CurvTON semantic splits built from cloth filename labels.
+        # Expected stem examples:
+        #   *_fc_012345_dresses
+        #   *_mc_045678_upper_body
+        #   *_mc_098765_kimono
+        all_loader = c.get("all")
+        if all_loader is not None and hasattr(all_loader, "dataset"):
+            all_ds = all_loader.dataset
+            if hasattr(all_ds, "datasets"):
+                flat_triplets = []
+                for sub_ds in all_ds.datasets:
+                    if hasattr(sub_ds, "triplets"):
+                        flat_triplets.extend(list(sub_ds.triplets))
+
+                def _extract_label_from_triplet(tri):
+                    cloth_path = tri[1]
+                    stem = Path(cloth_path).stem
+                    # label after _fc_<id>_ / _mc_<id>_
+                    parts = stem.split("_")
+                    if len(parts) >= 2:
+                        # robust parse: find fc/mc token then skip id token
+                        for i in range(len(parts) - 2):
+                            if parts[i] in ("fc", "mc"):
+                                return "_".join(parts[i + 2 :]).lower()
+                    return stem.lower()
+
+                # Traditional clothing labels observed in this repo's datasets.
+                traditional_labels = {
+                    "kimono", "yukata", "hanbok", "hanfu", "thobe", "kandura", "dishdasha",
+                    "bisht", "djellaba", "boubou", "agbada", "sherwani", "kurta_pajama",
+                    "salwar_kameez", "chapan", "changshan", "shenyi", "samue", "jinbei",
+                    "daura_suruwal", "shuka", "kazakh_shapan", "uyghur_doppa_outfit",
+                    "korean_dopo", "montsuki", "pashtun_dress", "ewe_kente_cloth",
+                    "zhuang_ethnic_dress", "ainu_attus", "chakma_dress", "chut_thai",
+                    "ao_ba_ba", "ryusou", "sherpa_bakhu",
+                }
+
+                def _build_subset_loader(name, pred):
+                    idxs = [i for i, tri in enumerate(flat_triplets) if pred(_extract_label_from_triplet(tri))]
+                    if not idxs:
+                        return
+                    subset = torch.utils.data.Subset(all_ds, idxs)
+                    curvton_loaders[name] = DataLoader(
+                        subset,
+                        batch_size=batch_size,
+                        shuffle=False,
+                        drop_last=False,
+                        collate_fn=collate_fn,
+                        **_safe_loader_kwargs(num_workers),
+                    )
+
+                _build_subset_loader("curvton_dresses", lambda lbl: lbl == "dresses")
+                _build_subset_loader("curvton_upper_body", lambda lbl: lbl == "upper_body")
+                _build_subset_loader("curvton_lower_body", lambda lbl: lbl == "lower_body")
+                _build_subset_loader("curvton_traditional", lambda lbl: lbl in traditional_labels)
+                _build_subset_loader("curvton_non_traditional", lambda lbl: lbl not in traditional_labels)
+
     if triplet_test_data_path:
         t = get_triplet_test_dataloaders(
             root_dir=triplet_test_data_path,
@@ -459,6 +516,7 @@ def evaluate_all_splits(
     eval_frac_curvton: float = 0.02,
     eval_frac_triplet: float = 0.02,
     eval_frac_street: float = 0.02,
+    eval_frac_curvton_extra: Optional[float] = None,
     feature_cache_root: Optional[str] = None,
 ):
     curvton_results: Dict[str, dict] = OrderedDict()
@@ -496,13 +554,22 @@ def evaluate_all_splits(
         summarize_single(name, street_results[name])
 
     for name, loader in loaders.curvton.items():
+        frac = eval_frac_curvton
+        if eval_frac_curvton_extra is not None and name in {
+            "curvton_traditional",
+            "curvton_non_traditional",
+            "curvton_dresses",
+            "curvton_upper_body",
+            "curvton_lower_body",
+        }:
+            frac = eval_frac_curvton_extra
         curvton_results[name] = evaluate_loader(
             loader=loader,
             predict_fn=predict_fn,
             device=device,
             progress_name=name,
             max_batches=max_batches,
-            eval_frac=eval_frac_curvton,
+            eval_frac=frac,
             paired_metrics=True,
             unpaired_metrics=True,
             apply_vae_gt_roundtrip=True,
