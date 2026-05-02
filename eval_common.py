@@ -71,7 +71,6 @@ from utils import (
     collate_fn,
     get_curvton_test_dataloaders,
     get_triplet_test_dataloaders,
-    _person_bbox_square_from_image,
 )
 
 
@@ -156,12 +155,11 @@ class StreetTryOnEvalDataset(Dataset):
         )
         self.tf = transforms.Compose(
             [
-                transforms.Resize((size, size)),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
             ]
         )
-        self._zero_mask = torch.zeros(1, size, size)
+        self._zero_mask = None
 
     def __len__(self):
         return len(self.files)
@@ -169,13 +167,10 @@ class StreetTryOnEvalDataset(Dataset):
     def __getitem__(self, idx):
         p = os.path.join(self.image_dir, self.files[idx])
         img_raw = Image.open(p).convert("RGB")
-        box = _person_bbox_square_from_image(img_raw, margin=0.15)
-        img_crop = img_raw.crop(box).resize((768, 768), Image.BICUBIC)
-        cloth_crop = transforms.CenterCrop(768)(
-            transforms.Resize(768, interpolation=transforms.InterpolationMode.BICUBIC)(img_raw)
-        )
-        img = self.tf(img_crop)
-        cloth = self.tf(cloth_crop)
+        img = self.tf(img_raw)
+        cloth = self.tf(img_raw)
+        if self._zero_mask is None or self._zero_mask.shape[-2:] != img.shape[-2:]:
+            self._zero_mask = torch.zeros(1, img.shape[-2], img.shape[-1])
         return {
             "ground_truth": img,
             "person": img,

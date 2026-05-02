@@ -364,31 +364,14 @@ def _eval_triplet_person_aware_tensor(
     out_size: int,
     pre_resize_size: int = 768,
 ):
-    """Apply center-crop preprocessing for triplet eval: 768x768 -> out_size.
-
-    This intentionally avoids person-bbox detection and keeps GT/person/cloth/tryon
-    preprocessing spatially aligned.
-    """
-    center_crop_768 = transforms.CenterCrop(pre_resize_size)
-    person_c = center_crop_768(
-        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(person_img)
-    )
-    tryon_c = center_crop_768(
-        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(tryon_img)
-    )
-    cloth_c = center_crop_768(
-        transforms.Resize(pre_resize_size, interpolation=transforms.InterpolationMode.BICUBIC)(cloth_img)
-    )
-
-    ops = []
-    if out_size and out_size > 0:
-        ops.append(transforms.Resize((out_size, out_size), interpolation=transforms.InterpolationMode.BICUBIC))
-    ops.extend([
+    """Triplet eval preprocessing with preserved geometry (no crop, no resize)."""
+    _ = out_size
+    _ = pre_resize_size
+    final_tf = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
     ])
-    final_tf = transforms.Compose(ops)
-    return final_tf(person_c), final_tf(cloth_c), final_tf(tryon_c)
+    return final_tf(person_img), final_tf(cloth_img), final_tf(tryon_img)
 
 
 class CurvtonDataset(Dataset):
@@ -637,22 +620,12 @@ def get_curvton_test_dataloaders(root_dir: str, batch_size=8, num_workers=32,
 # ============================================================
 
 def _triplet_eval_transform(size: int = 512) -> transforms.Compose:
-    """Eval transform for triplet datasets: resize shortest edge to 768,
-    center-crop to 768×768, then resize to ``size``×``size``.
-    This ensures the metric comparison uses the center of the image at
-    a consistent scale regardless of original aspect ratio.
-    """
-    ops = [
-        transforms.Resize(768),              # shortest edge -> 768, keeps AR
-        transforms.CenterCrop(768),          # square 768x768
-    ]
-    if size and size > 0:
-        ops.append(transforms.Resize((size, size)))  # final model resolution
-    ops.extend([
+    """Eval transform for triplet datasets with no crop/resize."""
+    _ = size
+    return transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
     ])
-    return transforms.Compose(ops)
 
 class TripletDataset(Dataset):
     """Load (cloth, person, tryon) triplets from the triplet_dataset layout.
@@ -1490,4 +1463,5 @@ def subsample_dataset(dataset, fraction, seed=42):
     indices = rng.sample(range(n), k)
     print(f"  ↳ Sub-sampled {k}/{n} samples ({fraction*100:.0f}%)")
     return Subset(dataset, indices)
+
 
