@@ -10,6 +10,27 @@
 
 set -euo pipefail
 
+# Usage:
+#   sbatch train_no_curriculum_catvton_14400steps_fullres.sh --run_nodes 1
+#   sbatch train_no_curriculum_catvton_14400steps_fullres.sh --run_nodes 2
+RUN_NNODES="${SLURM_NNODES:-2}"
+if [[ "${1:-}" == "--run_nodes" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "ERROR: --run_nodes requires a value (1 or 2)" >&2
+    exit 1
+  fi
+  RUN_NNODES="$2"
+  shift 2
+fi
+if [[ "$RUN_NNODES" != "1" && "$RUN_NNODES" != "2" ]]; then
+  echo "ERROR: run_nodes must be 1 or 2 (got: $RUN_NNODES)" >&2
+  exit 1
+fi
+if (( RUN_NNODES > SLURM_NNODES )); then
+  echo "ERROR: requested run_nodes=$RUN_NNODES but allocation has SLURM_NNODES=$SLURM_NNODES" >&2
+  exit 1
+fi
+
 WORK_DIR="/iopsstor/scratch/cscs/dbartaula/experiments_ank"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
@@ -55,13 +76,13 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 # Compute master address BEFORE srun (scontrol is available on login/compute nodes).
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR
-echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NNODES"
+echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NNODES  RUN_NNODES=$RUN_NNODES"
 
 # Use SLURM_PROCID (set per-task by srun) for node_rank instead of SLURM_NODEID.
 # Use the c10d rendezvous backend for robust multi-node coordination.
-srun bash -c '
+srun --nodes='"${RUN_NNODES}"' --ntasks='"${RUN_NNODES}"' --ntasks-per-node=1 bash -c '
   torchrun \
-    --nnodes='"${SLURM_NNODES}"' \
+    --nnodes='"${RUN_NNODES}"' \
     --nproc_per_node=4 \
     --node_rank=${SLURM_PROCID} \
     --rdzv_backend=c10d \

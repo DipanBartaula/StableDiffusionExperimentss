@@ -52,16 +52,41 @@ export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
+# Runtime node count selector (supports 1 or 2 nodes within this 2-node allocation).
+RUN_NNODES="${SLURM_NNODES}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --run_nodes)
+      RUN_NNODES="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "$RUN_NNODES" != "1" && "$RUN_NNODES" != "2" ]]; then
+  echo "Invalid --run_nodes '$RUN_NNODES'. Allowed values: 1 or 2."
+  exit 1
+fi
+
+if (( RUN_NNODES > SLURM_NNODES )); then
+  echo "--run_nodes=$RUN_NNODES exceeds allocated SLURM_NNODES=$SLURM_NNODES."
+  exit 1
+fi
+
 # Compute master address BEFORE srun (scontrol is available on login/compute nodes).
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR
-echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NNODES"
+echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NNODES  RUN_NNODES=$RUN_NNODES"
 
 # Use SLURM_PROCID (set per-task by srun) for node_rank instead of SLURM_NODEID.
 # Use the c10d rendezvous backend for robust multi-node coordination.
-srun bash -c '
+srun --nodes='"${RUN_NNODES}"' --ntasks='"${RUN_NNODES}"' --ntasks-per-node=1 bash -c '
   torchrun \
-    --nnodes='"${SLURM_NNODES}"' \
+    --nnodes='"${RUN_NNODES}"' \
     --nproc_per_node=4 \
     --node_rank=${SLURM_PROCID} \
     --rdzv_backend=c10d \
