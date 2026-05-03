@@ -31,7 +31,7 @@ if (( RUN_NNODES > SLURM_NNODES )); then
   exit 1
 fi
 
-WORK_DIR="/iopsstor/scratch/cscs/dbartaula/experiments_ank"
+WORK_DIR="/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
 cd "$WORK_DIR"
@@ -40,7 +40,7 @@ unset PYTHONHOME || true
 unset PYTHONPATH || true
 
 CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch27_env_new}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch28_env_new}"
 if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
   source "$CONDA_ROOT/etc/profile.d/conda.sh"
 else
@@ -80,9 +80,9 @@ echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NN
 
 # Use SLURM_PROCID (set per-task by srun) for node_rank instead of SLURM_NODEID.
 # Use the c10d rendezvous backend for robust multi-node coordination.
-srun --nodes='"${RUN_NNODES}"' --ntasks='"${RUN_NNODES}"' --ntasks-per-node=1 bash -c '
+srun --nodes=${RUN_NNODES} --ntasks=${RUN_NNODES} --ntasks-per-node=1 bash -c '
   torchrun \
-    --nnodes='"${RUN_NNODES}"' \
+    --nnodes=${RUN_NNODES} \
     --nproc_per_node=4 \
     --node_rank=${SLURM_PROCID} \
     --rdzv_backend=c10d \

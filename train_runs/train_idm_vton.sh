@@ -15,7 +15,7 @@ set -euo pipefail
 # Architecture: SDXL inpainting-style UNet with garment conditioning.
 # Loss: diffusion denoising objective on predicted noise (epsilon), with scheduler weighting.
 
-WORK_DIR="${WORK_DIR:-/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss}"
+WORK_DIR="/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss"
 DATA_DIR="${DATA_DIR:-/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate}"
 OUT_DIR="${OUT_DIR:-/iopsstor/scratch/cscs/dbartaula/experiments_assets}"
 
@@ -27,7 +27,7 @@ unset PYTHONPATH || true
 
 # Activate the intended conda env used on the cluster.
 CONDA_ROOT="/iopsstor/scratch/cscs/dbartaula/miniforge3"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch27_env_new}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-torch28_env_new}"
 if [ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]; then
   source "$CONDA_ROOT/etc/profile.d/conda.sh"
 else

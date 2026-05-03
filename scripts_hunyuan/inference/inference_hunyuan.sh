@@ -8,7 +8,7 @@
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
-WORK_DIR="/capstor/store/cscs/swissai/a168/dbartaula/Stable_Diffusion"
+WORK_DIR="/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss"
 
 cd "$WORK_DIR"
 export PYTHONPATH="$WORK_DIR:$PYTHONPATH"
