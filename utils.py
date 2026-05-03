@@ -954,6 +954,9 @@ def run_full_inference(model, cond_latents, num_inference_steps=50):
 
 def log_images(step, batch, model, noisy_latents, noise_pred,
                cond_latents, target_latents, num_inference_steps=50):
+    if not hasattr(wandb, "run") or wandb.run is None:
+        return
+
     def to_wandb_img(tensor, caption):
         img = (tensor[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         return wandb.Image(img, caption=caption)
@@ -1019,6 +1022,10 @@ def log_images_distributed(step, batch, model, cond_latents,
     All ranks MUST call this function (it contains collective operations).
     Only rank 0 actually logs to wandb.
     """
+    # If W&B is unavailable or not initialized, skip image logging gracefully.
+    if not hasattr(wandb, "run") or wandb.run is None:
+        return
+
     is_main = (rank == 0)
     is_dist = (world_size > 1) and dist.is_available() and dist.is_initialized()
     device  = cond_latents.device
