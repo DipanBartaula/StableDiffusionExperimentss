@@ -958,7 +958,8 @@ def log_images(step, batch, model, noisy_latents, noise_pred,
         img = (tensor[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         return wandb.Image(img, caption=caption)
 
-    W = IMAGE_SIZE  # pixel width of one image (512); decoded wide images are 2W
+    # Use runtime sample width (full-res safe) instead of fixed IMAGE_SIZE.
+    gt_w = int(batch["ground_truth"].shape[-1])
 
     with torch.no_grad():
         # ── Full inference: run all scheduler steps ──────────────
@@ -968,10 +969,12 @@ def log_images(step, batch, model, noisy_latents, noise_pred,
         model.unet.train()
         print(f"✓ Full inference complete")
 
-        # Decode all wide latents [B,4,64,128] → [B,3,512,1024], slice left=tryon
+        # Decode latents and keep only try-on width based on current batch.
         def _tryon(lat):
-            """VAE-decode a [B,4,64,128] latent and return the left try-on half [B,3,512,512]."""
-            return decode_latents(model.vae, lat)[:, :, :, :W]
+            """VAE-decode latent and return try-on crop with dynamic width."""
+            decoded = decode_latents(model.vae, lat)
+            w = min(gt_w, int(decoded.shape[-1]))
+            return decoded[:, :, :, :w]
 
         full_inference_img   = _tryon(full_inference_latents)    # predicted try-on
         target_img           = _tryon(target_latents)            # GT try-on reconstructed
@@ -1019,7 +1022,8 @@ def log_images_distributed(step, batch, model, cond_latents,
     is_main = (rank == 0)
     is_dist = (world_size > 1) and dist.is_available() and dist.is_initialized()
     device  = cond_latents.device
-    W       = IMAGE_SIZE
+    # Use runtime sample width (full-res safe) instead of fixed IMAGE_SIZE.
+    gt_w     = int(batch["ground_truth"].shape[-1])
 
     def _tensor_to_np(tensor):
         """[C,H,W] float [0,1] → [H,W,C] uint8 numpy."""
@@ -1035,9 +1039,13 @@ def log_images_distributed(step, batch, model, cond_latents,
         my_pred_latents = run_full_inference(model, my_cond, num_inference_steps)
         model.unet.train()
 
-        # Decode → left-half try-on  [1, 3, 512, 512]
-        my_pred_img   = decode_latents(model.vae, my_pred_latents)[:, :, :, :W]
-        my_target_img = decode_latents(model.vae, my_target)[:, :, :, :W]
+        # Decode and keep only try-on width based on current batch.
+        _pred_dec = decode_latents(model.vae, my_pred_latents)
+        _tgt_dec  = decode_latents(model.vae, my_target)
+        _w_pred   = min(gt_w, int(_pred_dec.shape[-1]))
+        _w_tgt    = min(gt_w, int(_tgt_dec.shape[-1]))
+        my_pred_img   = _pred_dec[:, :, :, :_w_pred]
+        my_target_img = _tgt_dec[:, :, :, :_w_tgt]
 
         # Raw inputs  (from batch, in [-1,1] → [0,1])
         my_gt    = (batch['ground_truth'][0:1] + 1) / 2      # [1, 3, H, W]
@@ -1248,7 +1256,8 @@ def _run_one_eval_sample(
             pred_latents = run_full_inference(model, cond_latents, _eval_inf_steps)
 
             pred_wide  = decode_latents(model.vae, pred_latents)
-            pred_tryon = pred_wide[:, :, :, :IMAGE_SIZE]
+            gt_w = int(gt.shape[-1])
+            pred_tryon = pred_wide[:, :, :, : min(gt_w, int(pred_wide.shape[-1]))]
             real_tryon = (gt / 2 + 0.5).clamp(0, 1)
 
             lp = lpips_fn(pred_tryon * 2 - 1, real_tryon * 2 - 1)

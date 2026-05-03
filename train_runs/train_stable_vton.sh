@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=stable_vton
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --account=a168
@@ -10,27 +10,7 @@
 
 set -euo pipefail
 
-# Usage:
-#   sbatch train_stable_vton.sh --run_nodes 1
-#   sbatch train_stable_vton.sh --run_nodes 2
-RUN_NNODES="${SLURM_NNODES:-2}"
-if [[ "${1:-}" == "--run_nodes" ]]; then
-  if [[ -z "${2:-}" ]]; then
-    echo "ERROR: --run_nodes requires a value (1 or 2)" >&2
-    exit 1
-  fi
-  RUN_NNODES="$2"
-  shift 2
-fi
-if [[ "$RUN_NNODES" != "1" && "$RUN_NNODES" != "2" ]]; then
-  echo "ERROR: run_nodes must be 1 or 2 (got: $RUN_NNODES)" >&2
-  exit 1
-fi
-if (( RUN_NNODES > SLURM_NNODES )); then
-  echo "ERROR: requested run_nodes=$RUN_NNODES but allocation has SLURM_NNODES=$SLURM_NNODES" >&2
-  exit 1
-fi
-export RUN_NNODES
+RUN_NNODES=1
 
 # StableVITON local implementation aligned to the official architecture/loss.
 # Repo: https://github.com/rlawjdghek/StableVITON
@@ -90,7 +70,7 @@ echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NN
 
 # Use SLURM_PROCID (set per-task by srun) for node_rank instead of SLURM_NODEID.
 # Use the c10d rendezvous backend for robust multi-node coordination.
-srun --nodes=${RUN_NNODES} --ntasks=${RUN_NNODES} --ntasks-per-node=1 bash -c '
+srun --nodes=1 --ntasks=1 --ntasks-per-node=1 bash -c '
   torchrun \
     --nnodes='"${RUN_NNODES}"' \
     --nproc_per_node=4 \
