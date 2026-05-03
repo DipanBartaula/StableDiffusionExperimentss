@@ -174,7 +174,7 @@ if __name__ == "__main__":
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--image_size", type=int, default=512, help="<=0 keeps native resolution (no resize)")
-    p.add_argument("--num_inference_steps", type=int, default=50)
+    p.add_argument("--num_inference_steps", type=int, default=30)
     p.add_argument("--decode_batch_size", type=int, default=1, help="Chunk size for VAE decode to reduce VRAM.")
     p.add_argument("--vae_fp16_decode", action="store_true", default=True, help="Use fp16 autocast during VAE decode.")
     p.add_argument("--no_vae_fp16_decode", action="store_false", dest="vae_fp16_decode",

@@ -864,7 +864,7 @@ def train(args):
                     print(f"\n\U0001f4ca Running distributed test-set evaluation at step {global_step} ...")
                 eval_metrics = evaluate_on_test(
                     model, test_loaders, device,
-                    num_inference_steps=50,
+                    num_inference_steps=30,
                     eval_frac=0.01,      # 1% per sample
                     ootd=args.ootd,
                     rank=rank,
@@ -930,7 +930,7 @@ def train(args):
             print(f"\n📊 Final end-of-training evaluation (step {global_step}) ...")
         final_eval_metrics = evaluate_on_test(
             model, test_loaders, device,
-            num_inference_steps=50,
+            num_inference_steps=30,
             eval_frac=0.01,
             ootd=args.ootd,
             rank=rank,
@@ -1015,7 +1015,7 @@ if __name__ == "__main__":
                              "(vitonhd+dresscode). Only used when --curriculum hard.")
     parser.add_argument("--phase2_start_step", type=int, default=28801,
                         help="Step at which to switch to phase-2 dataset (default: 28801)")
-    parser.add_argument("--num_inference_steps", type=int, default=50,
+    parser.add_argument("--num_inference_steps", type=int, default=30,
                         help="Number of inference steps for full denoising")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to a specific checkpoint .pt file to resume from")

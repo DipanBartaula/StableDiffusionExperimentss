@@ -378,7 +378,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--no_resume", action="store_true", default=False)
-    parser.add_argument("--num_inference_steps", type=int, default=50)
+    parser.add_argument("--num_inference_steps", type=int, default=30)
     args = parser.parse_args()
     args.run_name = args.run_name or "train_ootdiffusion"
     train(args)

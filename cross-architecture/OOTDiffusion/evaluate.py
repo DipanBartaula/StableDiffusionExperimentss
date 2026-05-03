@@ -182,7 +182,7 @@ if __name__ == "__main__":
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--gender", type=str, default="all", choices=["female", "male", "all"])
-    p.add_argument("--num_inference_steps", type=int, default=50)
+    p.add_argument("--num_inference_steps", type=int, default=30)
     p.add_argument("--max_batches", type=int, default=0, help="0 = full dataset")
     p.add_argument("--eval_frac_curvton", type=float, default=0.02)
     p.add_argument("--eval_frac_curvton_extra", type=float, default=0.02)

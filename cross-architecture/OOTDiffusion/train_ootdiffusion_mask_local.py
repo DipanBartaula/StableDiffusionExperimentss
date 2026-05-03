@@ -1,4 +1,4 @@
-"""OOTDiffusion trainer with real mask+pose conditioning from stratified-category dataset."""
+"""OOTDiffusion trainer with real mask conditioning (pose disabled) from stratified-category dataset."""
 
 import argparse
 import os
@@ -240,13 +240,12 @@ def train(args):
         for batch in loader:
             person = batch["person"].to(dist_info.device, non_blocking=True)
             cloth = batch["cloth"].to(dist_info.device, non_blocking=True)
-            pose = batch["pose"].to(dist_info.device, non_blocking=True)
             mask = batch["mask"].to(dist_info.device, non_blocking=True)
             gt = batch["ground_truth"].to(dist_info.device, non_blocking=True)
 
-            # Use actual mask + pose (no surrogate).
+            # Use actual mask only (pose disabled).
             masked_person = person * (1.0 - mask) + (-1.0) * mask
-            person_for_model = torch.clamp(0.5 * masked_person + 0.5 * pose, -1.0, 1.0)
+            person_for_model = masked_person
 
             with torch.no_grad():
                 target_lat = model.encode(gt)
@@ -276,7 +275,7 @@ def train(args):
                     pred_img = _sample_tryon(person_lat[:k], cloth_lat[:k], args.num_inference_steps)
                 payload = {
                     "images/pred_tryon": _to_wandb_image(pred_img[:8].detach().cpu(), f"OOT-mask pred step {step}"),
-                    "images/person_masked_pose": _to_wandb_image(person_for_model[:8].detach().cpu(), f"person+pose step {step}"),
+                    "images/person_masked": _to_wandb_image(person_for_model[:8].detach().cpu(), f"masked person step {step}"),
                     "images/mask": _to_wandb_image(mask[:8].repeat(1, 3, 1, 1).detach().cpu() * 2 - 1, f"mask step {step}"),
                 }
                 wb_run.log({k: v for k, v in payload.items() if v is not None}, step=step)
@@ -285,7 +284,7 @@ def train(args):
                 torch.save(
                     {
                         "step": step,
-                        "architecture": "OOTDiffusion + real mask/pose",
+                        "architecture": "OOTDiffusion + real mask (pose disabled)",
                         "denoising_unet_state_dict": model.denoising_unet.module.state_dict() if hasattr(model.denoising_unet, "module") else model.denoising_unet.state_dict(),
                         "outfitting_unet_state_dict": model.outfitting_unet.module.state_dict() if hasattr(model.outfitting_unet, "module") else model.outfitting_unet.state_dict(),
                         "outfit_adapter_state_dict": model.outfit_adapter.state_dict(),
@@ -302,7 +301,7 @@ def train(args):
         torch.save(
             {
                 "step": step,
-                "architecture": "OOTDiffusion + real mask/pose",
+                "architecture": "OOTDiffusion + real mask (pose disabled)",
                 "denoising_unet_state_dict": model.denoising_unet.module.state_dict() if hasattr(model.denoising_unet, "module") else model.denoising_unet.state_dict(),
                 "outfitting_unet_state_dict": model.outfitting_unet.module.state_dict() if hasattr(model.outfitting_unet, "module") else model.outfitting_unet.state_dict(),
                 "outfit_adapter_state_dict": model.outfit_adapter.state_dict(),
@@ -318,12 +317,12 @@ def train(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OOTDiffusion trainer with real mask+pose")
+    parser = argparse.ArgumentParser(description="OOTDiffusion trainer with real mask (pose disabled)")
     add_common_args(parser)
     parser.add_argument("--model_name", type=str, default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--outfitting_dropout", type=float, default=0.1)
     parser.add_argument("--category", type=str, default="all", choices=["all", "dresses", "upper_body", "lower_body", "uncertain"])
-    parser.add_argument("--num_inference_steps", type=int, default=50)
+    parser.add_argument("--num_inference_steps", type=int, default=30)
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--no_resume", action="store_true", default=False)
     args = parser.parse_args()

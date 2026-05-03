@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 from pathlib import Path
 import json
 import re
@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EVAL_SCRIPT = REPO_ROOT / 'evaluate.py'
 CKPT_DIR = Path('/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/Stable_diffusion_train_medium_only_catvton_fullres/checkpoints')
 RUN_NAME = CKPT_DIR.parent.name
-COMMAND = ['python', str(EVAL_SCRIPT), '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.25', '--eval_frac_curvton_extra', '0.02', '--image_size', '0', '--curvton_splits', 'easy,medium,hard,overall,traditional,non_traditional,dresses,upper_body,lower_body', '--num_inference_steps', '50', '--triplet_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/triplet_dataset_backup_1', '--street_tryon_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/benchmark_datasets/street_tryon', '--street_split', 'validation', '--eval_frac_triplet', '0.02', '--eval_frac_street', '0.02']
+COMMAND = ['python', str(EVAL_SCRIPT), '--checkpoint', '__CKPT_PATH__', '--curvton_test_data_path', '/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate_test', '--batch_size', '16', '--num_workers', '8', '--eval_frac_curvton', '0.25', '--eval_frac_curvton_extra', '0.02', '--image_size', '0', '--curvton_splits', 'overall', '--num_inference_steps', '30', '--triplet_test_data_path', '', '--street_tryon_data_path', '', ]
 
 
 def _latest_ckpt(ckpt_dir: Path) -> Path:
@@ -85,6 +85,8 @@ if __name__ == '__main__':
     except Exception as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         raise SystemExit(1)
+
+
 
 
 

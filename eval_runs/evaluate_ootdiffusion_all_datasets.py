@@ -25,7 +25,7 @@ COMMAND = [
     "--num_workers",
     "8",
     "--num_inference_steps",
-    "50",
+    "30",
     "--curvton_splits",
     "easy,medium,hard,overall,traditional,non_traditional,dresses,upper_body,lower_body",
     "--eval_frac_curvton", "0.25",
@@ -87,11 +87,29 @@ def main() -> int:
         print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
         return 1
 
+    extra_args = sys.argv[1:]
+    cli_ckpt = None
+    if extra_args:
+        if extra_args[0] and not extra_args[0].startswith("-"):
+            cli_ckpt = Path(extra_args[0])
+            extra_args = extra_args[1:]
+        elif "--checkpoint" in extra_args:
+            i = extra_args.index("--checkpoint")
+            if i + 1 < len(extra_args):
+                cli_ckpt = Path(extra_args[i + 1])
+                extra_args = extra_args[:i] + extra_args[i + 2:]
+    if cli_ckpt is not None:
+        ckpt_path = cli_ckpt
+
     cmd = [str(ckpt_path) if t == '__CKPT_PATH__' else t for t in COMMAND]
 
     print(f"Evaluating run: {RUN_NAME}")
     print(f"Using checkpoint: {ckpt_path}")
     print("Command:", " ".join(cmd))
+
+    if extra_args:
+        print("Forwarding extra CLI args:", " ".join(extra_args))
+        cmd = cmd + extra_args
 
     result = subprocess.run(cmd)
     if result.returncode == 0:
@@ -105,6 +123,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1)
+
 
 
 

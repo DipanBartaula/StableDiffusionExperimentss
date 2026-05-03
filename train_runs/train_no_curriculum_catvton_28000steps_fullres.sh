@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-WORK_DIR="/iopsstor/scratch/cscs/dbartaula/StableDiffusionExperimentss"
+WORK_DIR="/iopsstor/scratch/cscs/dbartaula/experiments_ank"
 DATA_DIR="/iopsstor/scratch/cscs/dbartaula/human_gen/dataset_v3_backup_1/dataset_ultimate"
 
 cd "$WORK_DIR"
@@ -46,19 +46,29 @@ for _if in hsn0 ib0 eth0 enp0s3 lo; do
   fi
 done
 
-export MASTER_PORT=29500
+# Derive a unique port from SLURM_JOB_ID to avoid collisions with other jobs.
+export MASTER_PORT=$(( 29500 + SLURM_JOB_ID % 1000 ))
 export TORCHELASTIC_ERROR_FILE=/tmp/torch_elastic_error_${SLURM_JOB_ID}.json
 export NCCL_DEBUG=INFO
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
+# Compute master address BEFORE srun (scontrol is available on login/compute nodes).
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR
-srun torchrun \
-  --nnodes=2 \
-  --nproc_per_node=4 \
-  --node_rank="${SLURM_NODEID}" \
-  --master_addr="${MASTER_ADDR}" \
-  --master_port=$MASTER_PORT \
-  train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path ${DATA_DIR} --batch_size 4 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 500 --use_dream --dream_lambda 10.0 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres
+echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NNODES"
+
+# Use SLURM_PROCID (set per-task by srun) for node_rank instead of SLURM_NODEID.
+# Use the c10d rendezvous backend for robust multi-node coordination.
+srun bash -c '
+  torchrun \
+    --nnodes='"${SLURM_NNODES}"' \
+    --nproc_per_node=4 \
+    --node_rank=${SLURM_PROCID} \
+    --rdzv_backend=c10d \
+    --rdzv_endpoint='"${MASTER_ADDR}"':'"${MASTER_PORT}"' \
+    --rdzv_id=${SLURM_JOB_ID} \
+    train.py --dataset curvton --curriculum none --stage_steps 9600 --max_steps 28000 --curvton_data_path '"${DATA_DIR}"' --batch_size 4 --num_workers 16 --gender all --image_size 0 --save_interval 1000 --image_log_interval 500 --skip_eval --run_name Stable_diffusion_train_no_curriculum_catvton_28000steps_fullres
+'
+
 
 
