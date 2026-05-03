@@ -33,7 +33,6 @@ conda activate "$CONDA_ENV_NAME"
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${WORK_DIR}:${WORK_DIR}/cross-architecture:${PYTHONPATH:-}"
 export WANDB_PROJECT=Stable_diffusion
-export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export NCCL_SOCKET_IFNAME=hsn
 export NCCL_NET_GDR_LEVEL=PHB

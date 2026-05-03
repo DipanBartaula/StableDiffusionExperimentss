@@ -30,7 +30,6 @@ conda activate "$CONDA_ENV_NAME"
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"
 export WANDB_PROJECT=Stable_diffusion
-export WANDB_ENTITY=078bct-anandi-tribhuvan-university-institute-of-engineering
 
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500

@@ -35,8 +35,6 @@ COMMAND = [
     "--output_json",
     "/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_stable_vton_mask/eval_metrics.json",
 ]
-
-
 def _latest_ckpt(ckpt_dir: Path) -> Path:
     final_ckpt = ckpt_dir / "ckpt_final.pt"
     if final_ckpt.exists():
@@ -60,8 +58,10 @@ def _print_output_json_if_available(cmd_tokens):
         out_path = Path(cmd_tokens[idx + 1])
     except (ValueError, IndexError):
         return
+
     if not out_path.exists():
         return
+
     try:
         data = json.loads(out_path.read_text(encoding="utf-8"))
         print("\nMetrics summary (from output_json):")
@@ -71,40 +71,43 @@ def _print_output_json_if_available(cmd_tokens):
 
 
 def main() -> int:
-    if not CKPT_DIR.exists():
-        print(f"Evaluating run: {RUN_NAME}")
-        print(f"Checkpoint directory not found: {CKPT_DIR}")
-        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
-        return 1
-    try:
-        ckpt_path = _latest_ckpt(CKPT_DIR)
-    except FileNotFoundError:
-        print(f"Evaluating run: {RUN_NAME}")
-        print(f"No checkpoint found in: {CKPT_DIR}")
-        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
-        return 1
     extra_args = sys.argv[1:]
-    cli_ckpt = None
+    ckpt_path = None
+
     if extra_args:
-        if extra_args[0] and not extra_args[0].startswith("-"):
-            cli_ckpt = Path(extra_args[0])
+        if extra_args[0].endswith(".pt"):
+            ckpt_path = Path(extra_args[0])
             extra_args = extra_args[1:]
         elif "--checkpoint" in extra_args:
             i = extra_args.index("--checkpoint")
             if i + 1 < len(extra_args):
-                cli_ckpt = Path(extra_args[i + 1])
-                extra_args = extra_args[:i] + extra_args[i + 2:]
-    if cli_ckpt is not None:
-        ckpt_path = cli_ckpt
+                ckpt_path = Path(extra_args[i + 1])
+                del extra_args[i:i + 2]
+
+    if ckpt_path is None:
+        if not CKPT_DIR.exists():
+            print(f"Evaluating run: {RUN_NAME}")
+            print(f"Checkpoint directory not found: {CKPT_DIR}")
+            print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+            return 1
+
+        try:
+            ckpt_path = _latest_ckpt(CKPT_DIR)
+        except FileNotFoundError:
+            print(f"Evaluating run: {RUN_NAME}")
+            print(f"No checkpoint found in: {CKPT_DIR}")
+            print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+            return 1
 
     cmd = [str(ckpt_path) if t == "__CKPT_PATH__" else t for t in COMMAND]
-    print(f"Evaluating run: {RUN_NAME}")
-    print(f"Using checkpoint: {ckpt_path}")
-    print("Command:", " ".join(cmd))
 
     if extra_args:
         print("Forwarding extra CLI args:", " ".join(extra_args))
         cmd = cmd + extra_args
+
+    print(f"Evaluating run: {RUN_NAME}")
+    print(f"Using checkpoint: {ckpt_path}")
+    print("Command:", " ".join(cmd))
 
     result = subprocess.run(cmd)
     if result.returncode == 0:
@@ -118,4 +121,3 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1)
-

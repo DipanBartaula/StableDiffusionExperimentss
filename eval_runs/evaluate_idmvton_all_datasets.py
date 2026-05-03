@@ -30,8 +30,6 @@ COMMAND = [
     "--output_json",
     "/iopsstor/scratch/cscs/dbartaula/experiments_assets_1/train_idm_vton/eval_metrics.json",
 ]
-
-
 def _latest_ckpt(ckpt_dir: Path) -> Path:
     final_ckpt = ckpt_dir / "ckpt_final.pt"
     if final_ckpt.exists():
@@ -68,21 +66,39 @@ def _print_output_json_if_available(cmd_tokens):
 
 
 def main() -> int:
-    if not CKPT_DIR.exists():
-        print(f"Evaluating run: {RUN_NAME}")
-        print(f"Checkpoint directory not found: {CKPT_DIR}")
-        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
-        return 1
+    extra_args = sys.argv[1:]
+    ckpt_path = None
 
-    try:
-        ckpt_path = _latest_ckpt(CKPT_DIR)
-    except FileNotFoundError:
-        print(f"Evaluating run: {RUN_NAME}")
-        print(f"No checkpoint found in: {CKPT_DIR}")
-        print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
-        return 1
+    if extra_args:
+        if extra_args[0].endswith(".pt"):
+            ckpt_path = Path(extra_args[0])
+            extra_args = extra_args[1:]
+        elif "--checkpoint" in extra_args:
+            i = extra_args.index("--checkpoint")
+            if i + 1 < len(extra_args):
+                ckpt_path = Path(extra_args[i + 1])
+                del extra_args[i:i + 2]
 
-    cmd = [str(ckpt_path) if t == '__CKPT_PATH__' else t for t in COMMAND]
+    if ckpt_path is None:
+        if not CKPT_DIR.exists():
+            print(f"Evaluating run: {RUN_NAME}")
+            print(f"Checkpoint directory not found: {CKPT_DIR}")
+            print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+            return 1
+
+        try:
+            ckpt_path = _latest_ckpt(CKPT_DIR)
+        except FileNotFoundError:
+            print(f"Evaluating run: {RUN_NAME}")
+            print(f"No checkpoint found in: {CKPT_DIR}")
+            print("Stopping evaluation (no fallback allowed).", file=sys.stderr)
+            return 1
+
+    cmd = [str(ckpt_path) if t == "__CKPT_PATH__" else t for t in COMMAND]
+
+    if extra_args:
+        print("Forwarding extra CLI args:", " ".join(extra_args))
+        cmd = cmd + extra_args
 
     print(f"Evaluating run: {RUN_NAME}")
     print(f"Using checkpoint: {ckpt_path}")
@@ -100,9 +116,3 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1)
-
-
-
-
-
-

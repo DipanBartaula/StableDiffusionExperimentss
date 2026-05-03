@@ -11,6 +11,7 @@ import argparse
 import traceback
 import logging
 import datetime
+import time
 
 logging.basicConfig(
     format="[%(asctime)s %(levelname)s] %(message)s",
@@ -449,34 +450,76 @@ def train(args):
 
     # WandB (rank 0 only)
     if is_main and wandb_enabled:
-        run = wandb.init(
-            project=os.getenv("WANDB_PROJECT", WANDB_PROJECT),
-            entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
-            id=run_name,
-            resume="allow",
-            config={
-                "lr": args.lr,
-                "batch_size_per_gpu": args.batch_size,
-                "total_batch_size": args.batch_size * world_size,
-                "world_size": world_size,
-                "epochs": args.epochs,
-                "model": MODEL_NAME,
-                "train_mode": args.train_mode,
-                "dataset": dataset_label,
-                "trainable_params": trainable_params,
-                "curriculum": args.curriculum,
-                "stage_steps": args.stage_steps,
-                "data_fraction": args.data_fraction,
-                "ootd": args.ootd,
-                "pose_model": "MediaPipe BlazePose model_complexity=1 (Full, 33 landmarks)",
-                "lr_schedule": f"cosine_anneal_{args.lr:.0e}_to_5e-05",
-                "lr_eta_min": 5e-5,
-                "max_steps": args.max_steps,
-                "phase2_data_path": getattr(args, 'phase2_data_path', None),
-                "phase2_start_step": getattr(args, 'phase2_start_step', 28801),
-            },
-            name=run_name
-        )
+        _wandb_cfg = {
+            "lr": args.lr,
+            "batch_size_per_gpu": args.batch_size,
+            "total_batch_size": args.batch_size * world_size,
+            "world_size": world_size,
+            "epochs": args.epochs,
+            "model": MODEL_NAME,
+            "train_mode": args.train_mode,
+            "dataset": dataset_label,
+            "trainable_params": trainable_params,
+            "curriculum": args.curriculum,
+            "stage_steps": args.stage_steps,
+            "data_fraction": args.data_fraction,
+            "ootd": args.ootd,
+            "pose_model": "MediaPipe BlazePose model_complexity=1 (Full, 33 landmarks)",
+            "lr_schedule": f"cosine_anneal_{args.lr:.0e}_to_5e-05",
+            "lr_eta_min": 5e-5,
+            "max_steps": args.max_steps,
+            "phase2_data_path": getattr(args, 'phase2_data_path', None),
+            "phase2_start_step": getattr(args, 'phase2_start_step', 28801),
+        }
+        _init_timeout = int(os.getenv("WANDB_INIT_TIMEOUT", "600"))
+        _online_retries = int(os.getenv("WANDB_ONLINE_RETRIES", "2"))
+        _run = None
+        _last_online_err = None
+        for _attempt in range(1, max(1, _online_retries) + 1):
+            try:
+                _run = wandb.init(
+                    project=os.getenv("WANDB_PROJECT", WANDB_PROJECT),
+                    entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
+                    id=run_name,
+                    resume="allow",
+                    config=_wandb_cfg,
+                    name=run_name,
+                    settings=wandb.Settings(init_timeout=_init_timeout),
+                )
+                break
+            except Exception as _we:
+                _last_online_err = _we
+                _train_log.warning(
+                    "wandb.init online failed on attempt %d/%d: %s",
+                    _attempt, _online_retries, _we,
+                )
+                if _attempt < _online_retries:
+                    time.sleep(5)
+
+        if _run is None:
+            _train_log.warning(
+                "wandb.init online failed after %d attempts (timeout=%ss). Retrying in offline mode.",
+                _online_retries, _init_timeout,
+            )
+            try:
+                os.environ["WANDB_MODE"] = "offline"
+                _run = wandb.init(
+                    project=os.getenv("WANDB_PROJECT", WANDB_PROJECT),
+                    entity=os.getenv("WANDB_ENTITY", WANDB_ENTITY),
+                    id=run_name,
+                    resume="allow",
+                    config=_wandb_cfg,
+                    name=run_name,
+                    settings=wandb.Settings(init_timeout=_init_timeout),
+                )
+                _train_log.warning("W&B started in offline mode (WANDB_MODE=offline).")
+            except Exception as _we2:
+                _train_log.warning(
+                    "wandb.init offline also failed (last online error: %s, offline error: %s). "
+                    "Continuing with W&B disabled.",
+                    _last_online_err, _we2,
+                )
+                wandb_enabled = False
 
     # Optimizer (only trainable params)
     trainable_params_list = [p for p in model.unet.parameters() if p.requires_grad]
