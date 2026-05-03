@@ -30,6 +30,7 @@ if (( RUN_NNODES > SLURM_NNODES )); then
   echo "ERROR: requested run_nodes=$RUN_NNODES but allocation has SLURM_NNODES=$SLURM_NNODES" >&2
   exit 1
 fi
+export RUN_NNODES
 
 # StableVITON local implementation aligned to the official architecture/loss.
 # Repo: https://github.com/rlawjdghek/StableVITON
@@ -91,7 +92,7 @@ echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NN
 # Use the c10d rendezvous backend for robust multi-node coordination.
 srun --nodes=${RUN_NNODES} --ntasks=${RUN_NNODES} --ntasks-per-node=1 bash -c '
   torchrun \
-    --nnodes=${RUN_NNODES} \
+    --nnodes='"${RUN_NNODES}"' \
     --nproc_per_node=4 \
     --node_rank=${SLURM_PROCID} \
     --rdzv_backend=c10d \

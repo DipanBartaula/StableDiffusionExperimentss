@@ -80,6 +80,7 @@ if (( RUN_NNODES > SLURM_NNODES )); then
   echo "--run_nodes=$RUN_NNODES exceeds allocated SLURM_NNODES=$SLURM_NNODES."
   exit 1
 fi
+export RUN_NNODES
 
 # Compute master address BEFORE srun (scontrol is available on login/compute nodes).
 MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
@@ -91,7 +92,7 @@ echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT  SLURM_NNODES=$SLURM_NN
 # Use the c10d rendezvous backend for robust multi-node coordination.
 srun --nodes=${RUN_NNODES} --ntasks=${RUN_NNODES} --ntasks-per-node=1 bash -c '
   torchrun \
-    --nnodes=${RUN_NNODES} \
+    --nnodes='"${RUN_NNODES}"' \
     --nproc_per_node=4 \
     --node_rank=${SLURM_PROCID} \
     --rdzv_backend=c10d \
